@@ -173,24 +173,31 @@ class ReadRequestPayload(ChecksummedPayload):
     Plaintext payload for a memory read request.
 
     Wire layout (20 bytes):
-      Address               [0:8]    uint64 LE
-      Chunk length echo     [8:12]   uint32 LE   (mirrors chunk_length)
-      Chunk length          [12:16]  uint32 LE
-      Padding               [16:18]  0x0000
-      Marker                [18:19]  0x11
-      Checksum              [19:20]  uint8        covers [0:19]
+        Address               [0:8]    uint64 LE
+        Transfer length*      [8:12]   uint32 LE
+        Chunk length          [12:16]  uint32 LE
+        Padding               [16:18]  0x0000
+        Marker                [18:19]  0x11
+        Checksum              [19:20]  uint8        covers [0:19]
+
+    Notes:
+    *       Transfer length
+            - On the first chunk of a read operation: represents the total number of bytes
+              to be transferred for the entire read request (declared transfer size).
+            - On subsequent chunks (or single-chunk reads): mirrors the chunk length and
+              is effectively redundant at the protocol level.
     """
 
     class Layout:
         ADDRESS: ClassVar[slice] = slice(0, 8)
-        CHUNK_LENGTH_ECHO: ClassVar[slice] = slice(8, 12)
+        TRANSFER_LENGTH: ClassVar[slice] = slice(8, 12)
         CHUNK_LENGTH: ClassVar[slice] = slice(12, 16)
         PADDING: ClassVar[slice] = slice(16, 18)
         MARKER: ClassVar[slice] = slice(18, 19)
         CHECKSUM: ClassVar[slice] = slice(19, 20)
 
         ADDRESS_SIZE: ClassVar[int] = ADDRESS.stop - ADDRESS.start
-        CHUNK_LENGTH_ECHO_SIZE: ClassVar[int] = CHUNK_LENGTH_ECHO.stop - CHUNK_LENGTH_ECHO.start
+        TRANSFER_LENGTH_SIZE: ClassVar[int] = TRANSFER_LENGTH.stop - TRANSFER_LENGTH.start
         CHUNK_LENGTH_SIZE: ClassVar[int] = CHUNK_LENGTH.stop - CHUNK_LENGTH.start
         PADDING_SIZE: ClassVar[int] = PADDING.stop - PADDING.start
         MARKER_SIZE: ClassVar[int] = MARKER.stop - MARKER.start
@@ -200,7 +207,7 @@ class ReadRequestPayload(ChecksummedPayload):
     CHECKSUM_COVERAGE: ClassVar[slice] = slice(Layout.ADDRESS.start, Layout.MARKER.stop)
 
     address: bytes = bytes(Layout.ADDRESS_SIZE)
-    chunk_length_echo: bytes = bytes(Layout.CHUNK_LENGTH_ECHO_SIZE)
+    transfer_length: bytes = bytes(Layout.TRANSFER_LENGTH_SIZE)
     chunk_length: bytes = bytes(Layout.CHUNK_LENGTH_SIZE)
     padding: bytes = bytes(Layout.PADDING_SIZE)
     marker: bytes = MARKER
@@ -211,32 +218,39 @@ class ReadRequestPayload(ChecksummedPayload):
     # ------------------------------------------------------------------
 
     @classmethod
-    def assemble(cls, address: int, chunk_length: int) -> bytes:
+    def assemble(cls, address: int, chunk_length: int, transfer_length: int | None = None) -> bytes:
         """Builds the payload, computes its checksum, and returns the wire bytes."""
-        return cls.build(address = address, chunk_length = chunk_length).to_bytes()
+        return cls.build(
+            address = address,
+            chunk_length = chunk_length,
+            transfer_length = transfer_length,
+        ).to_bytes()
 
     @classmethod
-    def disassemble(cls, raw: bytes) -> tuple[int, int]:
+    def disassemble(cls, raw: bytes) -> tuple[int, int, int]:
         """
         Validates the checksum and returns the parsed fields.
         :param raw:     Raw read request payload bytes.
-        :return:        (address, chunk_length) as integers.
+        :return:        (address, transfer_length, chunk_length) as integers.
         :raises ValueError: If the checksum is invalid.
         """
         instance = cls.from_bytes(raw)
         instance.validate()
-        return instance.address_int, instance.chunk_length_int
+        return instance.address_int, instance.transfer_length_int, instance.chunk_length_int
 
     # ------------------------------------------------------------------
     # Constructors
     # ------------------------------------------------------------------
 
     @classmethod
-    def build(cls, address: int, chunk_length: int) -> Self:
+    def build(cls, address: int, chunk_length: int, transfer_length: int | None = None) -> Self:
         """Constructs a payload object from logical parameters. Checksum is 0-initialised."""
         instance = cls()
         instance.address_int = address
-        instance.chunk_length_echo_int = chunk_length
+        if transfer_length is not None:
+            instance.transfer_length_int = transfer_length
+        else:
+            instance.transfer_length_int = chunk_length
         instance.chunk_length_int = chunk_length
         return instance
 
@@ -245,7 +259,7 @@ class ReadRequestPayload(ChecksummedPayload):
         """Parses raw bytes into a payload object. Does not validate the checksum."""
         return cls(
             address = raw[cls.Layout.ADDRESS],
-            chunk_length_echo = raw[cls.Layout.CHUNK_LENGTH_ECHO],
+            transfer_length = raw[cls.Layout.TRANSFER_LENGTH],
             chunk_length = raw[cls.Layout.CHUNK_LENGTH],
             padding = raw[cls.Layout.PADDING],
             marker = raw[cls.Layout.MARKER],
@@ -265,12 +279,12 @@ class ReadRequestPayload(ChecksummedPayload):
         self.address = struct.pack(Encoding.UINT64_LE, value)
 
     @property
-    def chunk_length_echo_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.chunk_length_echo)[0]
+    def transfer_length_int(self) -> int:
+        return struct.unpack(Encoding.UINT32_LE, self.transfer_length)[0]
 
-    @chunk_length_echo_int.setter
-    def chunk_length_echo_int(self, value: int) -> None:
-        self.chunk_length_echo = struct.pack(Encoding.UINT32_LE, value)
+    @transfer_length_int.setter
+    def transfer_length_int(self, value: int) -> None:
+        self.transfer_length = struct.pack(Encoding.UINT32_LE, value)
 
     @property
     def chunk_length_int(self) -> int:
@@ -288,7 +302,7 @@ class ReadRequestPayload(ChecksummedPayload):
     def raw_bytes(self) -> bytes:
         return b"".join((
             self.address,
-            self.chunk_length_echo,
+            self.transfer_length,
             self.chunk_length,
             self.padding,
             self.marker,

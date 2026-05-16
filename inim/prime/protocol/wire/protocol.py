@@ -167,7 +167,8 @@ class Protocol:
 
             response_payload_chunk = await self._read_memory_chunk(
                 address = address,
-                chunk_size = chunk_size,
+                chunk_length = chunk_size,
+                transfer_length = bytes_to_read if chunk_index == 0 else None
             )
 
             result[offset: offset + chunk_size] = response_payload_chunk
@@ -177,19 +178,22 @@ class Protocol:
     async def _read_memory_chunk(
             self,
             address: int,
-            chunk_size: int,
+            chunk_length: int,
+            transfer_length: int | None = None,
     ) -> bytes:
         """
         Reads a memory chunk of the specified amount of bytes, starting at the specified address.
-        :param address:     Memory address to start reading from.
-        :param chunk_size:  Number of bytes to read. This value is <= than the maximum read request chunk size.
-        :return:            The bytes read from the memory, without checksum.
+        :param address:         Memory address to start reading from.
+        :param chunk_length:    Number of bytes to read in the current chunk. This value is <= than the maximum read request chunk size.
+        :param transfer_length: Total number of bytes to read in the read memory operation. This value is None if this is not the first chunk in the operation.
+        :return:                The bytes read from the memory, without checksum.
         """
 
         # Build the plaintext read request payload
         plaintext_payload = ReadRequestPayload.assemble(
             address = address,
-            chunk_length = chunk_size,
+            chunk_length = chunk_length,
+            transfer_length = transfer_length,
         )
 
         # Encrypt the payload
@@ -202,7 +206,7 @@ class Protocol:
         frame = Frame.assemble(
             encrypted_payload = encrypted_payload,
             operation = Frame.InnerHeader.Operation.READ,
-            response_payload_length = chunk_size + ChecksummedPayload.Layout.CHECKSUM_SIZE,
+            response_payload_length = chunk_length + ChecksummedPayload.Layout.CHECKSUM_SIZE,
         )
 
         # Send the frame and receive the raw response

@@ -57,6 +57,7 @@ def print_payloads(packets: list[Packet]) -> None:
         print(f"Operation: {packet.frame.inner_header.operation_str}")
         print(f"Inner frame length: {packet.frame.outer_header.inner_frame_length_int}")
         print(f"Response inner frame length: {packet.frame.outer_header.response_inner_frame_length_int}")
+        print(f"Payload length: {len(packet.payload)}")
         print(packet.payload.hex(" "))
         print()
 
