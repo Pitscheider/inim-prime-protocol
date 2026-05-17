@@ -108,11 +108,13 @@ import asyncio
 from inim.prime.native.wire.protocol import Protocol
 from inim.prime.native.operations import get_partitions
 
+
 async def main():
-    async with Protocol(host="192.168.1.100", password="yourpass", port=6004) as proto:
+    async with Protocol(host = "192.168.1.100", password = "yourpass", port = 6004) as proto:
         partitions = await get_partitions(proto)
         for p in partitions:
             print(p)
+
 
 asyncio.run(main())
 ```

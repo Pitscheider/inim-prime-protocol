@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 from typing import Final, Self
 
-from prime.native.const import CommandOperation, Panel
+from inim.prime.native.const import CommandOperation, Panel, FrameOperation
 from .cipher import Cipher
 from .frame import OuterFrame, InnerFrame, Frame
-from const import FrameOperation
 from .payload import ReadRequestPayload, ReadResponsePayload, CommandRequestPayload, ChecksummedPayload
 from .transport import Transport
 

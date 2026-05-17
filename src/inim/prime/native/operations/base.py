@@ -1,8 +1,8 @@
 import struct
 from typing import Final
 
-from prime.native.const import AddressTable, Encoding, CommandOperation
-from prime.native.wire.protocol import Protocol
+from inim.prime.native.const import AddressTable, Encoding, CommandOperation
+from inim.prime.native.wire.protocol import Protocol
 
 
 async def resolve_address(protocol: Protocol, index: int) -> int:

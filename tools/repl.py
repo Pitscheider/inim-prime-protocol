@@ -1,13 +1,14 @@
 import asyncio
 
-from prime.native.wire import Protocol
-from prime.native.wire import Cipher
-from prime.native import operations
-from prime.native.models import PartitionMode
+from inim.prime.native.wire import Protocol
+from inim.prime.native.wire import Cipher
+from inim.prime.native import operations
+from inim.prime.native.models import PartitionMode
+from inim.prime.native.wire.frame import Frame, OuterFrame, InnerFrame
+
 from tools.filters import PacketFilter
 from tools.packets import Packet, load_packets, decrypt_packets
 from tools.utils import Config, get_yaml_config
-from wire.frame import Frame, OuterFrame, InnerFrame
 
 # ---------------------------------------------------------------------------
 # Display helpers

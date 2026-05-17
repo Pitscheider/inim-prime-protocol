@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import ClassVar, Self
 
-from const import Encoding, FrameOperation
+from inim.prime.native.const import Encoding, FrameOperation
 from inim.prime.native.utils import slice_size
 
 

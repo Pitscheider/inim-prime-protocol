@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from tools.packets import Packet
-from const import FrameOperation
+from inim.prime.native.const import FrameOperation
 
 
 # ---------------------------------------------------------------------------

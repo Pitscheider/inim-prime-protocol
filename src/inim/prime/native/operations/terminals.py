@@ -1,8 +1,10 @@
 from enum import StrEnum, auto
 
-from const import AddressTable, Memory
-from operations import resolve_address
-from wire import Protocol
+from inim.prime.native.const import AddressTable, Memory
+from inim.prime.native.wire import Protocol
+
+from . import resolve_address
+
 
 
 def _build_terminal_label_sizes() -> dict[TerminalType, int]:

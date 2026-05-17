@@ -2,11 +2,11 @@ import asyncio
 import struct
 from typing import Final
 
-from const import Memory
-from prime.native.const import AddressTable, Panel, Encoding, CommandOperation
-from prime.native.models import PartitionMode, PartitionStatus
-from prime.native.models.partitions import Partition
-from prime.native.wire.protocol import Protocol
+from inim.prime.native.const import Memory
+from inim.prime.native.const import AddressTable, Panel, Encoding, CommandOperation
+from inim.prime.native.models import PartitionMode, PartitionStatus
+from inim.prime.native.models.partitions import Partition
+from inim.prime.native.wire.protocol import Protocol
 from . import resolve_address
 
 PARTITIONS_MAX_NUMBER: Final[int] = 30

@@ -5,7 +5,7 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import ClassVar, Self
 
-from prime.native.const import Encoding, CommandOperation, Panel
+from inim.prime.native.const import Encoding, CommandOperation, Panel
 from inim.prime.native.utils import slice_size
 
 
