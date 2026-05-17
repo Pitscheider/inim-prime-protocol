@@ -1,4 +1,4 @@
-# inim-prime-protocol
+# inim-prime-native
 
 An unofficial Python library for communicating with **Inim Prime** alarm panels using the native binary protocol, the same protocol used by the official Inim Prime/STUDIO software.
 
