@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Self
 
 from const import Encoding, FrameOperation
-from inim.prime.protocol.utils import slice_size
+from inim.prime.native.utils import slice_size
 
 
 @dataclass(slots = True)

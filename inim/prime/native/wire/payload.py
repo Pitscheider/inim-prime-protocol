@@ -5,8 +5,8 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import ClassVar, Self
 
-from prime.protocol.const import Encoding, CommandOperation, Panel
-from inim.prime.protocol.utils import slice_size
+from prime.native.const import Encoding, CommandOperation, Panel
+from inim.prime.native.utils import slice_size
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ class ReadRequestPayload(ChecksummedPayload):
             - On the first chunk of a read operation: represents the total number of bytes
               to be transferred for the entire read request (declared transfer size).
             - On subsequent chunks (or single-chunk reads): mirrors the chunk length and
-              is effectively redundant at the protocol level.
+              is effectively redundant at the native level.
     """
 
     @dataclass(frozen = True)

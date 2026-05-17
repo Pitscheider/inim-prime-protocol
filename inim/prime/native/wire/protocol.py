@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Final, Self
 
-from prime.protocol.const import CommandOperation, Panel
+from prime.native.const import CommandOperation, Panel
 from .cipher import Cipher
 from .frame import OuterFrame, InnerFrame, Frame
 from const import FrameOperation

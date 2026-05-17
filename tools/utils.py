@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 
-from prime.protocol.const import Panel
+from prime.native.const import Panel
 
 @dataclass(frozen=True)
 class Config:

@@ -6,8 +6,8 @@ from scapy.layers.inet import IP, TCP
 from scapy.packet import Raw
 from scapy.plist import PacketList
 
-from prime.protocol.wire import Cipher
-from prime.protocol.const import Panel
+from prime.native.wire import Cipher
+from prime.native.const import Panel
 from tools.utils import list_files, choose_from_list
 from wire.frame import Frame
 

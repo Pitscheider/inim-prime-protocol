@@ -3,10 +3,10 @@ import struct
 from typing import Final
 
 from const import Memory
-from prime.protocol.const import AddressTable, Panel, Encoding, CommandOperation
-from prime.protocol.models import PartitionMode, PartitionStatus
-from prime.protocol.models.partitions import Partition
-from prime.protocol.wire.protocol import Protocol
+from prime.native.const import AddressTable, Panel, Encoding, CommandOperation
+from prime.native.models import PartitionMode, PartitionStatus
+from prime.native.models.partitions import Partition
+from prime.native.wire.protocol import Protocol
 from . import resolve_address
 
 PARTITIONS_MAX_NUMBER: Final[int] = 30

@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from typing import Self, ClassVar
 
 from const import FrameOperation
-from inim.prime.protocol.utils import slice_size
-from inim.prime.protocol.utils import round_up_to_block, crc16_arc
+from inim.prime.native.utils import slice_size
+from inim.prime.native.utils import round_up_to_block, crc16_arc
 from .cipher import Cipher
 from .header import Header, OuterHeader, InnerHeader
 

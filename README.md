@@ -105,8 +105,8 @@ poll: 1.0             # Poll interval in seconds (for future use)
 
 ```python
 import asyncio
-from inim.prime.protocol.wire.protocol import Protocol
-from inim.prime.protocol.operations import get_partitions
+from inim.prime.native.wire.protocol import Protocol
+from inim.prime.native.operations import get_partitions
 
 async def main():
     async with Protocol(host="192.168.1.100", password="yourpass", port=6004) as proto:

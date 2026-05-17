@@ -1,9 +1,9 @@
 import asyncio
 
-from prime.protocol.wire import Protocol
-from prime.protocol.wire import Cipher
-from prime.protocol import operations
-from prime.protocol.models import PartitionMode
+from prime.native.wire import Protocol
+from prime.native.wire import Cipher
+from prime.native import operations
+from prime.native.models import PartitionMode
 from tools.filters import PacketFilter
 from tools.packets import Packet, load_packets, decrypt_packets
 from tools.utils import Config, get_yaml_config
