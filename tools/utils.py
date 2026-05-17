@@ -9,6 +9,7 @@ class Config:
     password: str
     pin: str | None
     port: int
+    use_outer_frame: bool
     poll: float
 
 def get_yaml_config() -> Config:
@@ -31,6 +32,7 @@ def get_yaml_config() -> Config:
         password=cfg.get("password", Panel.DEFAULT_PASSWORD),
         pin=cfg.get("pin"),
         port=cfg.get("port", Panel.DEFAULT_PORT),
+        use_outer_frame=cfg.get("use_outer_frame", False),
         poll=cfg.get("poll", 1.0),
     )
 

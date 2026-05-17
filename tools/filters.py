@@ -6,7 +6,7 @@ Supported fields:
   destination         Packet destination IP address
   frame.size          Total frame size in bytes
   frame.operation     Operation type: "read" or "command"
-  frame.valid         Frame validity: "true" or "false"
+  frame.valid         OuterFrame validity: "true" or "false"
   frame.payload_size  Encrypted payload size in bytes
 
 Supported operators:   =  !=  <  >  <=  >=  contains
@@ -28,7 +28,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
-from prime.protocol.wire import Frame
+from prime.protocol.wire import OuterFrame
 from tools.packets import Packet
 
 
@@ -43,9 +43,9 @@ def _frame_size(packet: Packet) -> int:
 
 def _frame_operation(packet: Packet) -> str:
     op = packet.frame.inner_header.operation
-    if op == Frame.InnerHeader.Operation.READ:
+    if op == OuterFrame.InnerHeader.Operation.READ:
         return "read"
-    if op == Frame.InnerHeader.Operation.COMMAND:
+    if op == OuterFrame.InnerHeader.Operation.COMMAND:
         return "command"
     return op.hex()
 

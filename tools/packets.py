@@ -8,7 +8,7 @@ from scapy.plist import PacketList
 
 from prime.protocol.wire import Cipher
 from prime.protocol.const import Panel
-from prime.protocol.wire import Frame
+from prime.protocol.wire import OuterFrame
 from tools.utils import list_files, choose_from_list
 
 # Resolve path relative to this script (tools/)
@@ -20,7 +20,7 @@ PCAP_DIR = os.path.join(BASE_DIR, "..", "data", "captures")
 class Packet:
     source: str
     destination: str
-    frame: Frame
+    frame: OuterFrame
     payload: bytes = None
 
 
@@ -36,7 +36,7 @@ def filter_raw_packets(raw_packets: PacketList, port: int = Panel.DEFAULT_PORT) 
             Packet(
                 source=pkt[IP].src,
                 destination=pkt[IP].dst,
-                frame=Frame.from_bytes(bytes(pkt[Raw].load)),
+                frame=OuterFrame.from_bytes(bytes(pkt[Raw].load)),
             )
         )
 

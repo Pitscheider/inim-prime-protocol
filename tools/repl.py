@@ -24,11 +24,12 @@ Commands:
   current_filter            – Show the active filter (and optionally clear it)
   help_filter               – Show filter syntax reference
   resolve_address           - Resolves an address by performing an indirection lookup
-  get_partition_names       - Print partition names
+  get_partition_labels      - Print partition names
   get_partition_statuses    - Print partitions statuses
   get_partitions            - Print partitions statuses
   set_partition_modes
   get_panel_info
+  get_terminal_labels
   exit / quit               – Exit the program
 """
 
@@ -54,9 +55,9 @@ def print_payloads(packets: list[Packet]) -> None:
 
     for packet in packets:
         print(f"{packet.source} --> {packet.destination}")
-        print(f"Operation: {packet.frame.inner_header.operation_str}")
-        print(f"Inner frame length: {packet.frame.outer_header.inner_frame_length_int}")
-        print(f"Response inner frame length: {packet.frame.outer_header.response_inner_frame_length_int}")
+        print(f"Operation: {packet.frame.inner_frame.header.operation_str}")
+        print(f"Inner frame length: {packet.frame.header.inner_frame_length_int}")
+        print(f"Response inner frame length: {packet.frame.header.response_inner_frame_length_int}")
         print(f"Payload length: {len(packet.payload)}")
         print(packet.payload.hex(" "))
         print()
@@ -222,6 +223,12 @@ async def get_panel_info(protocol: Protocol):
     print()
 
     protocol.disconnect()
+
+async def get_terminal_labels(protocol: Protocol):
+    await protocol.connect()
+
+    protocol.disconnect()
+
 # ---------------------------------------------------------------------------
 # REPL
 # ---------------------------------------------------------------------------
@@ -235,6 +242,7 @@ async def repl(config: Config) -> None:
         host=config.host,
         password=config.password,
         port=config.port,
+        use_outer_frame = config.use_outer_frame,
     )
 
     print_help()

@@ -3,11 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
-import struct
 from typing import Self, ClassVar
 
-from prime.protocol.const import Encoding
-from .frame import Frame
+from .frame import Header
 
 
 class Transport:
@@ -206,6 +204,7 @@ class Transport:
     async def exchange_frame(
             self,
             frame: bytes,
+            header_type: type[Header]
     ) -> bytes:
         """
         Sends a frame to the panel and waits for the corresponding response.
@@ -216,6 +215,7 @@ class Transport:
             - Full transmission of the outgoing frame before receiving
 
         :param frame:               The raw frame to send.
+        :param header_type:         Header class type
         :return:                    The response as a raw frame.
         :raises ConnectionError:    If the transport is not connected.
         :raises TimeoutError:       If the response is not received in time.
@@ -245,7 +245,7 @@ class Transport:
             await self._writer.drain()
 
             # Receive response
-            response = await self._receive()
+            response = await self._receive(header_type)
 
             # Record exchange timestamp (for rate limiting)
             self._last_exchanged_at = asyncio.get_running_loop().time()
@@ -254,6 +254,7 @@ class Transport:
 
     async def _receive(
             self,
+            header_type: type[Header],
     ) -> bytes:
         """
         Low-level transport receive method.
@@ -278,26 +279,22 @@ class Transport:
             assert self._reader is not None
 
             # Read fixed-size outer header
-            outer_header = await asyncio.wait_for(
-                self._reader.readexactly(Frame.OuterHeader.SIZE),
+            header_bytes = await asyncio.wait_for(
+                self._reader.readexactly(header_type.SIZE),
                 timeout = self._receive_timeout,
             )
 
-            # Extract declared inner frame length (framing only)
-            inner_frame_length = struct.unpack(
-                Encoding.UINT32_LE,
-                outer_header[Frame.OuterHeader.Layout.INNER_FRAME_LENGTH],
-            )[0]
+            header = header_type.from_bytes(header_bytes)
 
             if self._logger:
                 self._logger.debug(
-                    "TRANSPORT -> Header received, declared inner length = %d bytes.",
-                    inner_frame_length,
+                    "TRANSPORT -> Header received, declared inner body length = %d bytes.",
+                    header.inner_body_length,
                 )
 
             # Read inner frame
-            inner_frame = await asyncio.wait_for(
-                self._reader.readexactly(inner_frame_length),
+            inner_body = await asyncio.wait_for(
+                self._reader.readexactly(header.inner_body_length),
                 timeout = self._receive_timeout,
             )
 
@@ -321,7 +318,10 @@ class Transport:
                 f"Panel did not respond within {self._receive_timeout:.0f}s."
             ) from None
 
-        result = outer_header + inner_frame
+        result = b"".join((
+            header.raw_bytes,
+            inner_body,
+        ))
 
         if self._logger:
             self._logger.debug(
@@ -330,6 +330,7 @@ class Transport:
             )
 
         return result
+
 
     async def _enforce_exchange_interval(
             self,

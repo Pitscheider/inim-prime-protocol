@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Self
 
 from prime.protocol.const import Encoding, CommandOperation, Panel
+from inim.prime.protocol.utils import slice_size
 
 
 # ---------------------------------------------------------------------------
@@ -104,10 +105,7 @@ class ChecksummedPayload(BasePayload, ABC):
     subclasses only need to override it if their meaningful content
     is something other than the raw validated bytes.
     """
-
-    class Layout:
-        CHECKSUM_SIZE: ClassVar[int] = 1
-
+    CHECKSUM_SIZE: ClassVar[int] = 1
     CHECKSUM_COVERAGE: ClassVar[slice]  # subclasses define the exact coverage
 
     # ------------------------------------------------------------------
@@ -188,30 +186,58 @@ class ReadRequestPayload(ChecksummedPayload):
               is effectively redundant at the protocol level.
     """
 
-    class Layout:
-        ADDRESS: ClassVar[slice] = slice(0, 8)
-        TRANSFER_LENGTH: ClassVar[slice] = slice(8, 12)
-        CHUNK_LENGTH: ClassVar[slice] = slice(12, 16)
-        PADDING: ClassVar[slice] = slice(16, 18)
-        MARKER: ClassVar[slice] = slice(18, 19)
-        CHECKSUM: ClassVar[slice] = slice(19, 20)
+    @dataclass(frozen = True)
+    class _Layout:
+        address: slice
+        transfer_length: slice
+        chunk_length: slice
+        padding: slice
+        marker: slice
+        checksum: slice
 
-        ADDRESS_SIZE: ClassVar[int] = ADDRESS.stop - ADDRESS.start
-        TRANSFER_LENGTH_SIZE: ClassVar[int] = TRANSFER_LENGTH.stop - TRANSFER_LENGTH.start
-        CHUNK_LENGTH_SIZE: ClassVar[int] = CHUNK_LENGTH.stop - CHUNK_LENGTH.start
-        PADDING_SIZE: ClassVar[int] = PADDING.stop - PADDING.start
-        MARKER_SIZE: ClassVar[int] = MARKER.stop - MARKER.start
-        CHECKSUM_SIZE: ClassVar[int] = CHECKSUM.stop - CHECKSUM.start
+        @property
+        def address_size(self) -> int:
+            return slice_size(self.address)
+
+        @property
+        def transfer_length_size(self) -> int:
+            return slice_size(self.transfer_length)
+
+        @property
+        def chunk_length_size(self) -> int:
+            return slice_size(self.chunk_length)
+
+        @property
+        def padding_size(self) -> int:
+            return slice_size(self.padding)
+
+        @property
+        def marker_size(self) -> int:
+            return slice_size(self.marker)
+
+        @property
+        def checksum_size(self) -> int:
+            return slice_size(self.checksum)
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        address = slice(0, 8),
+        transfer_length = slice(8, 12),
+        chunk_length = slice(12, 16),
+        padding = slice(16, 18),
+        marker = slice(18, 19),
+        checksum = slice(19, 20),
+    )
+
 
     MARKER: ClassVar[bytes] = b"\x11"
-    CHECKSUM_COVERAGE: ClassVar[slice] = slice(Layout.ADDRESS.start, Layout.MARKER.stop)
+    CHECKSUM_COVERAGE: ClassVar[slice] = slice(LAYOUTS.address.start, LAYOUTS.marker.stop)
 
-    address: bytes = bytes(Layout.ADDRESS_SIZE)
-    transfer_length: bytes = bytes(Layout.TRANSFER_LENGTH_SIZE)
-    chunk_length: bytes = bytes(Layout.CHUNK_LENGTH_SIZE)
-    padding: bytes = bytes(Layout.PADDING_SIZE)
+    address: bytes = bytes(LAYOUTS.address_size)
+    transfer_length: bytes = bytes(LAYOUTS.transfer_length_size)
+    chunk_length: bytes = bytes(LAYOUTS.chunk_length_size)
+    padding: bytes = bytes(LAYOUTS.padding_size)
     marker: bytes = MARKER
-    checksum: bytes = bytes(Layout.CHECKSUM_SIZE)
+    checksum: bytes = bytes(LAYOUTS.checksum_size)
 
     # ------------------------------------------------------------------
     # High-level entry points
@@ -258,12 +284,12 @@ class ReadRequestPayload(ChecksummedPayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object. Does not validate the checksum."""
         return cls(
-            address = raw[cls.Layout.ADDRESS],
-            transfer_length = raw[cls.Layout.TRANSFER_LENGTH],
-            chunk_length = raw[cls.Layout.CHUNK_LENGTH],
-            padding = raw[cls.Layout.PADDING],
-            marker = raw[cls.Layout.MARKER],
-            checksum = raw[cls.Layout.CHECKSUM],
+            address = raw[cls.LAYOUTS.address],
+            transfer_length = raw[cls.LAYOUTS.transfer_length],
+            chunk_length = raw[cls.LAYOUTS.chunk_length],
+            padding = raw[cls.LAYOUTS.padding],
+            marker = raw[cls.LAYOUTS.marker],
+            checksum = raw[cls.LAYOUTS.checksum],
         )
 
     # ------------------------------------------------------------------
@@ -320,9 +346,15 @@ class ReadResponsePayload(ChecksummedPayload):
       Checksum  [n : n+1]   uint8       covers [0:n]
     """
 
-    class Layout:
-        DATA: ClassVar[slice] = slice(0, -1)
-        CHECKSUM: ClassVar[slice] = slice(-1, None)
+    @dataclass(frozen = True)
+    class _Layout:
+        data: slice
+        checksum: slice
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        data = slice(0, -1),
+        checksum = slice(-1, None),
+    )
 
     CHECKSUM_COVERAGE: ClassVar[slice] = slice(0, -1)  # everything except the last byte
 
@@ -361,8 +393,8 @@ class ReadResponsePayload(ChecksummedPayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object. Does not validate the checksum."""
         return cls(
-            data = raw[cls.Layout.DATA],
-            checksum = raw[cls.Layout.CHECKSUM],
+            data = raw[cls.LAYOUTS.data],
+            checksum = raw[cls.LAYOUTS.checksum],
         )
 
     # ------------------------------------------------------------------
@@ -391,17 +423,30 @@ class CommandRequestPayload(BasePayload):
     Note: command payloads carry no checksum — this is by Inim wire design.
     """
 
-    class Layout:
-        OPERATION: ClassVar[slice] = slice(0, 4)
-        PIN: ClassVar[slice] = slice(4, 10)
-        DATA: ClassVar[slice] = slice(10, None)
+    @dataclass(frozen = True)
+    class _Layout:
+        operation: slice
+        pin: slice
+        data: slice
 
-        OPERATION_SIZE: ClassVar[int] = OPERATION.stop - OPERATION.start
-        PIN_SIZE: ClassVar[int] = PIN.stop - PIN.start
+        @property
+        def operation_size(self) -> int:
+            return slice_size(self.operation)
+
+        @property
+        def pin_size(self) -> int:
+            return slice_size(self.pin)
+
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        operation = slice(0, 4),
+        pin = slice(4, 10),
+        data = slice(10, None),
+    )
 
     PIN_PADDING: ClassVar[int] = 0xFF
 
-    operation: bytes = bytes(Layout.OPERATION_SIZE)
+    operation: bytes = bytes(LAYOUTS.operation_size)
     pin: bytes = b""
     data: bytes = b""
 
@@ -455,9 +500,9 @@ class CommandRequestPayload(BasePayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object."""
         return cls(
-            operation = raw[cls.Layout.OPERATION],
-            pin = raw[cls.Layout.PIN],
-            data = raw[cls.Layout.DATA],
+            operation = raw[cls.LAYOUTS.operation],
+            pin = raw[cls.LAYOUTS.pin],
+            data = raw[cls.LAYOUTS.data],
         )
 
     # ------------------------------------------------------------------
@@ -495,10 +540,10 @@ class CommandRequestPayload(BasePayload):
     def pin_str(self, pin: str) -> None:
         if not pin.isdigit():
             raise ValueError(f"PIN must contain digits only, got: {pin!r}")
-        if not (1 <= len(pin) <= self.Layout.PIN_SIZE):
-            raise ValueError(f"PIN must be 1–{self.Layout.PIN_SIZE} digits, got {len(pin)}.")
+        if not (1 <= len(pin) <= self.LAYOUTS.pin_size):
+            raise ValueError(f"PIN must be 1–{self.LAYOUTS.pin_size} digits, got {len(pin)}.")
         encoded = [int(d) for d in pin]
-        encoded += [self.PIN_PADDING] * (self.Layout.PIN_SIZE - len(pin))
+        encoded += [self.PIN_PADDING] * (self.LAYOUTS.pin_size - len(pin))
         self.pin = bytes(encoded)
 
     def _decode_pin(self) -> str:

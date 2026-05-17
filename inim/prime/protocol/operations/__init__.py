@@ -7,3 +7,7 @@ from .partitions import (
     set_partition_modes,
     reset_partitions,
 )
+
+from .terminals import (
+    get_terminal_labels
+)

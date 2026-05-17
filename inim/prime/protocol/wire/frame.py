@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import struct
+from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from enum import Enum
 from typing import Self, ClassVar, Final
 
 from prime.protocol.const import Encoding
+from inim.prime.protocol.utils import slice_size
 from .cipher import Cipher
 
 """
@@ -77,207 +79,390 @@ def _crc16_arc(
 
 
 @dataclass(slots = True)
-class Frame:
-    ### Nested data classes
-    @dataclass(slots = True)
-    class OuterHeader:
+class Header(ABC):
+    SIZE: ClassVar[int]
 
-        ### Constants
-        SIZE: ClassVar[int] = 12
-        MAGIC: ClassVar[bytes] = b"\x50\x53"
-        RESPONSE_INNER_FRAME_LENGTH_DEFAULT: ClassVar[int] = 0
+    @property
+    @abstractmethod
+    def inner_body_length(self) -> int:
+        ...
 
-        class Layout:
-            MAGIC: ClassVar[slice] = slice(0, 2)
-            PADDING: ClassVar[slice] = slice(2, 4)
-            INNER_FRAME_LENGTH: ClassVar[slice] = slice(4, 8)
-            RESPONSE_INNER_FRAME_LENGTH: ClassVar[slice] = slice(8, 12)
+    @classmethod
+    @abstractmethod
+    def from_bytes(
+            cls,
+            header: bytes
+    ) -> Self:
+        ...
 
-            MAGIC_SIZE: ClassVar[int] = MAGIC.stop - MAGIC.start
-            PADDING_SIZE: ClassVar[int] = PADDING.stop - PADDING.start
-            INNER_FRAME_LENGTH_SIZE: ClassVar[int] = INNER_FRAME_LENGTH.stop - INNER_FRAME_LENGTH.start
-            RESPONSE_INNER_FRAME_LENGTH_SIZE: ClassVar[
-                int] = RESPONSE_INNER_FRAME_LENGTH.stop - RESPONSE_INNER_FRAME_LENGTH.start
+    @property
+    @abstractmethod
+    def raw_bytes(self) -> bytes:
+        ...
 
-        ### Attributes
-        # Magic                        [0:2]     0x50 0x53       raw
-        # Padding                      [2:4]     0-initialised   raw
-        # Inner frame length           [4:8]     0-initialised   uint32 LE
-        # Response inner frame length  [8:12]    0-initialised   uint32 LE
-        magic: bytes = MAGIC
-        padding: bytes = bytes(Layout.PADDING_SIZE)
-        inner_frame_length: bytes = bytes(Layout.INNER_FRAME_LENGTH_SIZE)
-        response_inner_frame_length: bytes = bytes(Layout.RESPONSE_INNER_FRAME_LENGTH_SIZE)
-
-        ### Constructors
-        @classmethod
-        def build(
-                cls,
-                inner_frame_length: int,
-                response_inner_frame_length: int,
-        ) -> Self:
-            outer_header = cls()
-            outer_header.inner_frame_length_int = inner_frame_length
-            outer_header.response_inner_frame_length_int = response_inner_frame_length
-            return outer_header
-
-        @classmethod
-        def from_bytes(
-                cls,
-                outer_header: bytes
-        ) -> Self:
-            return cls(
-                magic = outer_header[cls.Layout.MAGIC],
-                padding = outer_header[cls.Layout.PADDING],
-                inner_frame_length = outer_header[cls.Layout.INNER_FRAME_LENGTH],
-                response_inner_frame_length = outer_header[cls.Layout.RESPONSE_INNER_FRAME_LENGTH],
-            )
-
-        ### Properties
-        @property
-        def inner_frame_length_int(self) -> int:
-            return struct.unpack(Encoding.UINT32_LE, self.inner_frame_length)[0]
-
-        @inner_frame_length_int.setter
-        def inner_frame_length_int(self, value: int) -> None:
-            self.inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
-
-        @property
-        def response_inner_frame_length_int(self) -> int:
-            return struct.unpack(Encoding.UINT32_LE, self.response_inner_frame_length)[0]
-
-        @response_inner_frame_length_int.setter
-        def response_inner_frame_length_int(self, value: int) -> None:
-            self.response_inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
-
-        @property
-        def raw_bytes(self) -> bytes:
-            return b"".join((
-                self.magic,
-                self.padding,
-                self.inner_frame_length,
-                self.response_inner_frame_length,
-            ))
-
-    @dataclass(slots = True)
-    class InnerHeader:
-
-        ### Constants
-        class Layout:
-            MAGIC: ClassVar[slice] = slice(0, 2)
-            CRC: ClassVar[slice] = slice(2, 4)
-            OPERATION: ClassVar[slice] = slice(4, 6)
-            INNER_FRAME_LENGTH: ClassVar[slice] = slice(6, 10)
-
-            MAGIC_SIZE: ClassVar[int] = MAGIC.stop - MAGIC.start
-            CRC_SIZE: ClassVar[int] = CRC.stop - CRC.start
-            OPERATION_SIZE: ClassVar[int] = OPERATION.stop - OPERATION.start
-            INNER_FRAME_LENGTH_SIZE: ClassVar[int] = INNER_FRAME_LENGTH.stop - INNER_FRAME_LENGTH.start
-
-        class Operation(bytes, Enum):
-            READ = b"\x00\x00"
-            COMMAND = b"\x01\x00"
-
-        SIZE: ClassVar[int] = 10
-        MAGIC: ClassVar[bytes] = b"\x50\x50"
-        CRC_COVERAGE: ClassVar[slice] = slice(Layout.OPERATION.start, SIZE)
-
-        ### Attributes
-        # Magic                 [0:2]     0x50 0x50       raw
-        # CRC-16/ARC            [2:4]     0-initialised   uint16 LE
-        # Operation             [4:6]     0-initialised   raw
-        # Inner frame length    [6:10]    0-initialised   uint32 LE
-        magic: bytes = MAGIC
-        crc: bytes = bytes(Layout.CRC_SIZE)
-        operation: bytes = bytes(Layout.OPERATION_SIZE)
-        inner_frame_length: bytes = bytes(Layout.INNER_FRAME_LENGTH_SIZE)
-
-        ### Constructors
-        @classmethod
-        def build(
-                cls,
-                operation: Operation,
-                inner_frame_length: int,
-        ) -> Self:
-            inner_header = cls()
-            inner_header.operation_enum = operation
-            inner_header.inner_frame_length_int = inner_frame_length
-
-            return inner_header
-
-        @classmethod
-        def from_bytes(
-                cls,
-                inner_header: bytes
-        ) -> Self:
-            return cls(
-                magic = inner_header[cls.Layout.MAGIC],
-                crc = inner_header[cls.Layout.CRC],
-                operation = inner_header[cls.Layout.OPERATION],
-                inner_frame_length = inner_header[cls.Layout.INNER_FRAME_LENGTH],
-            )
-
-        ### Properties
-        @property
-        def inner_frame_length_int(self) -> int:
-            return struct.unpack(Encoding.UINT32_LE, self.inner_frame_length)[0]
-
-        @inner_frame_length_int.setter
-        def inner_frame_length_int(self, value: int) -> None:
-            self.inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
-
-        @property
-        def crc_int(self) -> int:
-            """Inner header CRC value as an integer (uint16 LE)."""
-            return struct.unpack(Encoding.UINT16_LE, self.crc)[0]
-
-        @crc_int.setter
-        def crc_int(self, value: int) -> None:
-            self.crc = struct.pack(Encoding.UINT16_LE, value)
-
-        @property
-        def operation_enum(self) -> Operation | None:
-            """Return operation as enum."""
-            try:
-                return self.Operation(self.operation)
-            except ValueError:
-                raise ValueError(f"Unknown operation: {self.operation.hex()}")
-
-        @operation_enum.setter
-        def operation_enum(self, operation: Operation) -> None:
-            self.operation = operation.value
-
-        @property
-        def raw_bytes(self) -> bytes:
-            return b"".join((
-                self.magic,
-                self.crc,
-                self.operation,
-                self.inner_frame_length,
-            ))
-
-        @property
-        def operation_str(self) -> str:
-            try:
-                op = self.operation_enum
-                assert op is not None
-                return op.name
-            except ValueError:
-                return "UNKNOWN"
+@dataclass(slots = True)
+class OuterHeader(Header):
 
     ### Constants
-    class Layout:
-        OuterHeader: ClassVar[slice] = slice(0, 12)
-        InnerHeader: ClassVar[slice] = slice(12, 22)
-        EncryptedPayload: ClassVar[slice] = slice(22, None)
+    SIZE: ClassVar[int] = 12
+    MAGIC: ClassVar[bytes] = b"\x50\x53"
+    RESPONSE_INNER_FRAME_LENGTH_DEFAULT: ClassVar[int] = 0
 
-    MIN_SIZE: ClassVar[int] = OuterHeader.SIZE + InnerHeader.SIZE + Cipher.AES_BLOCK_SIZE
-    CRC_COVERAGE: ClassVar[slice] = slice(OuterHeader.SIZE + InnerHeader.Layout.OPERATION.start, None)
+    @dataclass(frozen = True)
+    class _Layout:
+        magic: slice
+        padding: slice
+        inner_frame_length: slice
+        response_inner_frame_length: slice
+
+        @property
+        def magic_size(self) -> int:
+            return slice_size(self.magic)
+
+        @property
+        def padding_size(self) -> int:
+            return slice_size(self.padding)
+
+        @property
+        def inner_frame_length_size(self) -> int:
+            return slice_size(self.inner_frame_length)
+
+        @property
+        def response_inner_frame_length_size(self) -> int:
+            return slice_size(self.response_inner_frame_length)
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        magic = slice(0, 2),
+        padding = slice(2, 4),
+        inner_frame_length = slice(4, 8),
+        response_inner_frame_length = slice(8, 12),
+    )
+
 
     ### Attributes
-    inner_header: InnerHeader  # [0:12]    Inner header
-    outer_header: OuterHeader  # [12:22]   Outer header
-    encrypted_payload: bytes  # [22: ]    Encrypted payload
+    # Magic                        [0:2]     0x50 0x53       raw
+    # Padding                      [2:4]     0-initialised   raw
+    # Inner frame length           [4:8]     0-initialised   uint32 LE
+    # Response inner frame length  [8:12]    0-initialised   uint32 LE
+    magic: bytes = MAGIC
+    padding: bytes = bytes(LAYOUTS.padding_size)
+    inner_frame_length: bytes = bytes(LAYOUTS.inner_frame_length_size)
+    response_inner_frame_length: bytes = bytes(LAYOUTS.response_inner_frame_length_size)
+
+
+    ### Constructors
+    @classmethod
+    def build(
+            cls,
+            inner_frame_length: int,
+            response_inner_frame_length: int,
+    ) -> Self:
+        outer_header = cls()
+        outer_header.inner_frame_length_int = inner_frame_length
+        outer_header.response_inner_frame_length_int = response_inner_frame_length
+        return outer_header
+
+    @classmethod
+    def from_bytes(
+            cls,
+            outer_header: bytes
+    ) -> Self:
+        return cls(
+            magic = outer_header[cls.LAYOUTS.magic],
+            padding = outer_header[cls.LAYOUTS.padding],
+            inner_frame_length = outer_header[cls.LAYOUTS.inner_frame_length],
+            response_inner_frame_length = outer_header[cls.LAYOUTS.response_inner_frame_length],
+        )
+
+
+    ### Properties
+    ## Header
+    @property
+    def inner_body_length(self) -> int:
+        return self.inner_frame_length_int
+
+    ## Helper
+    @property
+    def inner_frame_length_int(self) -> int:
+        return struct.unpack(Encoding.UINT32_LE, self.inner_frame_length)[0]
+
+    @inner_frame_length_int.setter
+    def inner_frame_length_int(self, value: int) -> None:
+        self.inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
+
+    @property
+    def response_inner_frame_length_int(self) -> int:
+        return struct.unpack(Encoding.UINT32_LE, self.response_inner_frame_length)[0]
+
+    @response_inner_frame_length_int.setter
+    def response_inner_frame_length_int(self, value: int) -> None:
+        self.response_inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
+
+    ## Serialization
+    @property
+    def raw_bytes(self) -> bytes:
+        return b"".join((
+            self.magic,
+            self.padding,
+            self.inner_frame_length,
+            self.response_inner_frame_length,
+        ))
+
+    ## Validation
+    @property
+    def is_magic_valid(self) -> bool:
+        """True if magic bytes match 0x5053."""
+        return self.magic == OuterHeader.MAGIC
+
+    @property
+    def is_padding_valid(self) -> bool:
+        """True if padding bytes are 0x0000."""
+        return self.padding == bytes(OuterHeader.LAYOUTS.padding_size)
+
+    @property
+    def is_valid(self) -> bool:
+        """True if all validation checks pass."""
+        return (
+            self.is_magic_valid
+            and self.is_padding_valid
+        )
+
+
+    ### Methods
+    ## Validation
+    def validate(self) -> None:
+        """
+        Validates raising ValueError on the first failed check.
+        :raises ValueError: If a checked property fails the check.
+        """
+        if not self.is_magic_valid:
+            raise ValueError(
+                f"Outer header magic mismatch: expected {OuterHeader.MAGIC.hex()}, "
+                f"got {self.magic.hex()}."
+            )
+        if not self.is_padding_valid:
+            raise ValueError(
+                f"Outer header padding mismatch: expected {bytes(OuterHeader.LAYOUTS.padding_size).hex()}, "
+                f"got {self.padding.hex()}."
+            )
+
+
+@dataclass(slots = True)
+class InnerHeader(Header):
+
+    ### Constants
+    @dataclass(frozen = True)
+    class _Layout:
+        magic: slice
+        crc: slice
+        operation: slice
+        inner_frame_length: slice
+
+        @property
+        def magic_size(self) -> int:
+            return slice_size(self.magic)
+
+        @property
+        def crc_size(self) -> int:
+            return slice_size(self.crc)
+
+        @property
+        def operation_size(self) -> int:
+            return slice_size(self.operation)
+
+        @property
+        def inner_frame_length_size(self) -> int:
+            return slice_size(self.inner_frame_length)
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        magic = slice(0, 2),
+        crc = slice(2, 4),
+        operation = slice(4, 6),
+        inner_frame_length = slice(6, 10),
+    )
+
+    class Operation(bytes, Enum):
+        READ = b"\x00\x00"
+        COMMAND = b"\x01\x00"
+
+    SIZE: ClassVar[int] = 10
+    MAGIC: ClassVar[bytes] = b"\x50\x50"
+    CRC_COVERAGE: ClassVar[slice] = slice(LAYOUTS.operation.start, SIZE)
+
+
+    ### Attributes
+    # Magic                 [0:2]     0x50 0x50       raw
+    # CRC-16/ARC            [2:4]     0-initialised   uint16 LE
+    # Operation             [4:6]     0-initialised   raw
+    # Inner frame length    [6:10]    0-initialised   uint32 LE
+    magic: bytes = MAGIC
+    crc: bytes = bytes(LAYOUTS.crc_size)
+    operation: bytes = bytes(LAYOUTS.operation_size)
+    inner_frame_length: bytes = bytes(LAYOUTS.inner_frame_length_size)
+
+
+    ### Constructors
+    @classmethod
+    def build(
+            cls,
+            operation: Operation,
+            inner_frame_length: int,
+    ) -> Self:
+        inner_header = cls()
+        inner_header.operation_enum = operation
+        inner_header.inner_frame_length_int = inner_frame_length
+
+        return inner_header
+
+    @classmethod
+    def from_bytes(
+            cls,
+            inner_header: bytes
+    ) -> Self:
+        return cls(
+            magic = inner_header[cls.LAYOUTS.magic],
+            crc = inner_header[cls.LAYOUTS.crc],
+            operation = inner_header[cls.LAYOUTS.operation],
+            inner_frame_length = inner_header[cls.LAYOUTS.inner_frame_length],
+        )
+
+
+    ### Properties
+    ## Header
+    @property
+    def inner_body_length(self) -> int:
+        return self.inner_frame_length_int - self.SIZE
+
+    ## Helper
+    @property
+    def inner_frame_length_int(self) -> int:
+        return struct.unpack(Encoding.UINT32_LE, self.inner_frame_length)[0]
+
+    @inner_frame_length_int.setter
+    def inner_frame_length_int(self, value: int) -> None:
+        self.inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
+
+    @property
+    def crc_int(self) -> int:
+        """Inner header CRC value as an integer (uint16 LE)."""
+        return struct.unpack(Encoding.UINT16_LE, self.crc)[0]
+
+    @crc_int.setter
+    def crc_int(self, value: int) -> None:
+        self.crc = struct.pack(Encoding.UINT16_LE, value)
+
+    @property
+    def operation_enum(self) -> Operation | None:
+        """Return operation as enum."""
+        try:
+            return self.Operation(self.operation)
+        except ValueError:
+            raise ValueError(f"Unknown operation: {self.operation.hex()}")
+
+    @operation_enum.setter
+    def operation_enum(self, operation: Operation) -> None:
+        self.operation = operation.value
+
+    @property
+    def operation_str(self) -> str:
+        try:
+            op = self.operation_enum
+            assert op is not None
+            return op.name
+        except ValueError:
+            return "UNKNOWN"
+
+    ## Serialization
+    @property
+    def raw_bytes(self) -> bytes:
+        return b"".join((
+            self.magic,
+            self.crc,
+            self.operation,
+            self.inner_frame_length,
+        ))
+
+    ## Validation
+    @property
+    def is_magic_valid(self) -> bool:
+        """True if magic bytes match 0x5050."""
+        return self.magic == InnerHeader.MAGIC
+
+    @property
+    def is_valid(self) -> bool:
+        """True if all validation checks pass."""
+        return (
+            self.is_magic_valid
+        )
+
+
+    ### Methods
+    ## Validation
+    def validate(self) -> None:
+        """
+        Validates the frame raising ValueError on the first failed check.
+        :raises ValueError: If a checked property fails the check.
+        """
+        if not self.is_magic_valid:
+            raise ValueError(
+                f"Inner header magic mismatch: expected {InnerHeader.MAGIC.hex()}, "
+                f"got {self.magic.hex()}."
+            )
+
+
+@dataclass(slots = True)
+class Frame(ABC):
+
+    header: Header
+
+    @property
+    def header_type(self) -> type[Header]:
+        return type(self.header)
+
+    @property
+    @abstractmethod
+    def raw_bytes(self) -> bytes:
+        """
+        :return: Current frame bytes assembled from field values in wire order, without recomputing parameters.
+        """
+        ...
+
+    @abstractmethod
+    def to_bytes(self) -> bytes:
+        """
+        Recomputes meaningful parameters from current field values if necessary.
+        Then assembles the complete wire frame as bytes.
+        :return: Assembled frame bytes with recomputed parameters.
+        """
+        ...
+
+
+@dataclass(slots = True)
+class InnerFrame(Frame):
+
+    ### Constants
+    @dataclass(frozen = True)
+    class _Layout:
+        inner_header: slice
+        encrypted_payload: slice
+
+        @property
+        def inner_header_size(self) -> int:
+            return slice_size(self.inner_header)
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        inner_header = slice(0, 10),
+        encrypted_payload = slice(10, None),
+    )
+
+    CRC_COVERAGE: ClassVar[slice] = slice(InnerHeader.LAYOUTS.operation.start, None)
+    MIN_SIZE: ClassVar[int] = InnerHeader.SIZE + Cipher.AES_BLOCK_SIZE
+
+
+    ### Attributes
+    header: InnerHeader
+    encrypted_payload: bytes
+
 
     ### Main methods
     @classmethod
@@ -285,19 +470,217 @@ class Frame:
             cls,
             encrypted_payload: bytes,
             operation: InnerHeader.Operation,
+    ) -> bytes:
+        """
+        Assembles a raw inner frame from meaningful parameters, computes CRC, and returns it as bytes.
+        :param encrypted_payload:           AES-128-CBC ciphertext to embed.
+        :param operation:                   Operation type.
+        :return: The constructed inner frame as bytes.
+        """
+        inner_frame = cls.build(
+            encrypted_payload = encrypted_payload,
+            operation = operation,
+        )
+
+        return inner_frame.to_bytes()
+
+    @classmethod
+    def disassemble(
+            cls,
+            inner_frame_bytes: bytes,
+    ) -> bytes:
+        """
+        Disassembles a raw inner frame, validates its integrity, and returns the encrypted payload.
+        :param inner_frame_bytes:   Raw inner frame bytes.
+        :return:                    The encrypted payload as bytes.
+        :raises ValueError:         If the validation of the frame fails.
+        """
+        inner_frame = cls.from_bytes(inner_frame_bytes)
+        inner_frame.validate()
+        return inner_frame.encrypted_payload
+
+
+    ### Constructors
+    @classmethod
+    def build(
+            cls,
+            encrypted_payload: bytes,
+            operation: InnerHeader.Operation,
+    ) -> Self:
+        """
+        Constructs an inner frame from meaningful parameters.
+        CRC is 0-initialised.
+        :param encrypted_payload:           AES-128-CBC ciphertext to embed.
+        :param operation:                   Operation type.
+        :return: The constructed frame object.
+        """
+        inner_frame_length = InnerHeader.SIZE + len(encrypted_payload)
+
+        inner_frame = cls(
+            header = InnerHeader.build(
+                operation = operation,
+                inner_frame_length = inner_frame_length,
+            ),
+            encrypted_payload = encrypted_payload,
+        )
+
+        return inner_frame
+
+    @classmethod
+    def from_bytes(cls, inner_frame_bytes: bytes) -> Self:
+        """
+        Parses a raw bytes frame into an InnerFrame instance.
+        Does not validate the inner frame.
+        :param inner_frame_bytes:   Raw bytes of the inner frame to parse.
+        :return:                    The constructed inner frame object.
+        """
+        inner_header = inner_frame_bytes[cls.LAYOUTS.inner_header]
+        encrypted_payload = inner_frame_bytes[cls.LAYOUTS.encrypted_payload]
+
+        return cls(
+            header = InnerHeader.from_bytes(inner_header),
+            encrypted_payload = encrypted_payload,
+        )
+
+
+    ### Properties
+    ## Helper
+    @property
+    def encrypted_payload_length(self) -> int:
+        """
+        :return: Encrypted payload length.
+        """
+        return len(self.encrypted_payload)
+
+    ## Validation properties
+    @property
+    def is_size_valid(self) -> bool:
+        """True if the encrypted payload meets the minimum valid size."""
+        return len(self.encrypted_payload) >= Cipher.AES_BLOCK_SIZE
+
+    @property
+    def is_inner_frame_length_valid(self) -> bool:
+        """True if inner_frame_length_inner matches the actual inner frame size."""
+        actual = InnerHeader.SIZE + len(self.encrypted_payload)
+        return self.header.inner_frame_length_int == actual
+
+    @property
+    def is_crc_valid(self) -> bool:
+        """True if the declared CRC matches the value calculated from current fields."""
+        return self.header.crc_int == self.calculate_crc()
+
+    @property
+    def is_valid(self) -> bool:
+        """True if all validation checks pass."""
+        return (
+                self.is_size_valid
+                and self.header.is_magic_valid
+                and self.is_inner_frame_length_valid
+                and self.is_crc_valid
+        )
+
+    ## Serialization
+    @property
+    def raw_bytes(self) -> bytes:
+        """
+        :return: Current inner frame bytes assembled from field values in wire order, without recomputing CRC.
+        """
+        return b"".join((
+            self.header.raw_bytes,
+            self.encrypted_payload,
+        ))
+
+
+    ### Methods
+    def validate(self) -> None:
+        """
+        Validates the inner frame raising ValueError on the first failed check.
+        :raises ValueError: If a checked property fails the check.
+        """
+        self.header.validate()
+        if not self.is_size_valid:
+            raise ValueError(f"Encrypted payload too short: need ≥ {Cipher.AES_BLOCK_SIZE} bytes.")
+        if not self.is_inner_frame_length_valid:
+            actual = InnerHeader.SIZE + len(self.encrypted_payload)
+            raise ValueError(
+                f"Inner frame length mismatch: "
+                f"declared {self.header.inner_frame_length_int}, actual {actual}."
+            )
+        if not self.is_crc_valid:
+            raise ValueError(
+                f"CRC mismatch: declared 0x{self.header.crc_int:04X}, "
+                f"computed 0x{self.calculate_crc():04X}."
+            )
+
+    ## CRC
+    def calculate_crc(self) -> int:
+        """
+        :return: Calculated CRC-16/ARC from current field values.
+        """
+        return _crc16_arc(
+            self.header.raw_bytes[InnerHeader.CRC_COVERAGE] + self.encrypted_payload
+        )
+
+    def update_crc(self) -> Self:
+        """
+        Updates the stored CRC bytes to match the value calculated from current fields.
+        :return: Self with updated CRC-16/ARC from current fields.
+        """
+        self.header.crc_int = self.calculate_crc()
+        return self
+
+    ## Serialization
+    def to_bytes(self) -> bytes:
+        """
+        Recomputes CRC from current field values then assembles the complete wire inner frame as bytes.
+        :return: Assembled inner frame bytes with updated CRC.
+        """
+        self.update_crc()
+        return self.raw_bytes
+
+
+@dataclass(slots = True)
+class OuterFrame(Frame):
+
+    ### Constants
+    @dataclass(frozen = True)
+    class _Layout:
+        outer_header: slice
+        inner_frame: slice
+
+        @property
+        def outer_header_size(self) -> int:
+            return slice_size(self.outer_header)
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        outer_header = slice(0, 12),
+        inner_frame = slice(12, None),
+    )
+
+    MIN_SIZE: ClassVar[int] = OuterHeader.SIZE + InnerFrame.MIN_SIZE
+
+
+    ### Attributes
+    header: OuterHeader
+    inner_frame: InnerFrame
+
+
+    ### Main methods
+    @classmethod
+    def assemble(
+            cls,
+            inner_frame: InnerFrame,
             response_payload_length: int | None = None,
     ) -> bytes:
         """
-        Assembles a raw frame from meaningful parameters, computes CRC, and returns it as bytes.
-        :param encrypted_payload:           AES-128-CBC ciphertext to embed.
+        Assembles a raw outer frame from meaningful parameters, computes CRC, and returns it as bytes.
+        :param inner_frame:                 Inner frame instance.
         :param response_payload_length:     Expected length of the response plaintext payload.
-        :param operation:                   Operation type.
-        :return: The constructed frame as bytes.
+        :return: The constructed outer frame as bytes.
         """
         frame = cls.build(
-            encrypted_payload = encrypted_payload,
+            inner_frame = inner_frame,
             response_payload_length = response_payload_length,
-            operation = operation,
         )
 
         return frame.to_bytes()
@@ -308,47 +691,43 @@ class Frame:
             frame_bytes: bytes,
     ) -> bytes:
         """
-        Disassembles a raw frame, validates its integrity, and returns the encrypted payload.
+        Disassembles a raw outer frame, validates its integrity, and returns the encrypted payload.
         :param frame_bytes: Raw frame bytes.
         :return:            The encrypted payload as bytes.
         :raises ValueError: If the validation of the frame fails.
         """
         frame = cls.from_bytes(frame_bytes)
         frame.validate()
-        return frame.encrypted_payload
+        return frame.inner_frame.encrypted_payload
+
 
     ### Constructors
     @classmethod
     def build(
             cls,
-            encrypted_payload: bytes,
-            operation: InnerHeader.Operation,
+            inner_frame: InnerFrame,
             response_payload_length: int | None = None,
     ) -> Self:
         """
-        Constructs a frame from meaningful parameters.
+        Constructs an outer frame from meaningful parameters.
         CRC is 0-initialised.
-        :param encrypted_payload:           AES-128-CBC ciphertext to embed.
+        :param inner_frame:                 Inner frame instance.
         :param response_payload_length:     Expected length of the response plaintext payload.
-        :param operation:                   Operation type.
-        :return: The constructed frame object.
+        :return: The constructed outer frame object.
         """
-        inner_frame_length = cls.InnerHeader.SIZE + len(encrypted_payload)
+        inner_frame_length = inner_frame.header.inner_frame_length_int
+
         if response_payload_length is not None:
-            response_inner_frame_length = _round_up_to_block(response_payload_length) + Frame.InnerHeader.SIZE
+            response_inner_frame_length = _round_up_to_block(response_payload_length) + InnerHeader.SIZE
         else:
-            response_inner_frame_length = cls.OuterHeader.RESPONSE_INNER_FRAME_LENGTH_DEFAULT
+            response_inner_frame_length = OuterHeader.RESPONSE_INNER_FRAME_LENGTH_DEFAULT
 
         frame = cls(
-            outer_header = cls.OuterHeader.build(
+            header = OuterHeader.build(
                 inner_frame_length = inner_frame_length,
                 response_inner_frame_length = response_inner_frame_length,
             ),
-            inner_header = cls.InnerHeader.build(
-                operation = operation,
-                inner_frame_length = inner_frame_length,
-            ),
-            encrypted_payload = encrypted_payload,
+            inner_frame = inner_frame,
         )
 
         return frame
@@ -356,195 +735,110 @@ class Frame:
     @classmethod
     def from_bytes(cls, frame_bytes: bytes) -> Self:
         """
-        Parses a raw bytes frame into a Frame instance.
+        Parses a raw bytes outer frame into a OuterFrame instance.
         Does not validate the frame.
-        :param frame_bytes:     Raw bytes of the frame to parse.
+        :param frame_bytes:     Raw bytes of the outer frame to parse.
         :return:                The constructed frame object.
         """
-        outer_header = frame_bytes[cls.Layout.OuterHeader]
-        inner_header = frame_bytes[cls.Layout.InnerHeader]
-        encrypted_payload = frame_bytes[cls.Layout.EncryptedPayload]
+        outer_header = frame_bytes[cls.LAYOUTS.outer_header]
+        inner_frame = frame_bytes[cls.LAYOUTS.inner_frame]
 
         return cls(
-            outer_header = cls.OuterHeader.from_bytes(outer_header),
-            inner_header = cls.InnerHeader.from_bytes(inner_header),
-            encrypted_payload = encrypted_payload,
+            header = OuterHeader.from_bytes(outer_header),
+            inner_frame = InnerFrame.from_bytes(inner_frame),
         )
 
     ### Properties
+    ## Helper
     @property
     def encrypted_payload_length(self) -> int:
         """
         :return: Encrypted payload length.
         """
-        return len(self.encrypted_payload)
+        return self.inner_frame.encrypted_payload_length
 
     @property
     def length(self) -> int:
         """
-        :return: Frame length.
+        :return: Outer frame length.
         """
-        return self.outer_header.SIZE + self.inner_header.SIZE + self.encrypted_payload_length
+        return OuterHeader.SIZE + InnerHeader.SIZE + self.encrypted_payload_length
 
-    ## Serialization properties
-    @property
-    def inner_header_raw_bytes(self) -> bytes:
-        """
-        :return: Current inner header bytes assembled from field values in wire order, without recomputing CRC.
-        """
-        return self.inner_header.raw_bytes
-
-    @property
-    def outer_header_raw_bytes(self) -> bytes:
-        """
-        :return: Current outer header bytes assembled from field values in wire order.
-        """
-        return self.outer_header.raw_bytes
-
+    ## Serialization
     @property
     def raw_bytes(self) -> bytes:
         """
-        :return: Current frame bytes assembled from field values in wire order, without recomputing CRC.
+        :return: Current outer frame bytes assembled from field values in wire order, without recomputing CRC.
         """
         return b"".join((
-            self.outer_header_raw_bytes,
-            self.inner_header_raw_bytes,
-            self.encrypted_payload,
+            self.header.raw_bytes,
+            self.inner_frame.raw_bytes,
         ))
 
     ## Validation properties
     @property
-    def is_size_valid(self) -> bool:
-        """True if the frame meets the minimum valid size."""
-        total = len(self.outer_header_raw_bytes) + len(self.inner_header_raw_bytes) + len(self.encrypted_payload)
-        return total >= self.MIN_SIZE
-
-    @property
-    def is_outer_magic_valid(self) -> bool:
-        """True if outer magic bytes match 0x5053."""
-        return self.outer_header.magic == self.OuterHeader.MAGIC
-
-    @property
-    def is_inner_magic_valid(self) -> bool:
-        """True if inner magic bytes match 0x5050."""
-        return self.inner_header.magic == self.InnerHeader.MAGIC
-
-    @property
-    def is_outer_padding_valid(self) -> bool:
-        """True if outer padding bytes are 0x0000."""
-        return self.outer_header.padding == bytes(2)
-
-    @property
-    def is_inner_frame_length_valid(self) -> bool:
-        """True if inner_frame_length_inner matches the actual inner frame size."""
-        actual = len(self.inner_header_raw_bytes) + len(self.encrypted_payload)
-        return self.inner_header.inner_frame_length_int == actual
-
-    @property
     def is_inner_frame_length_consistent(self) -> bool:
         """True if both headers declare the same inner frame length."""
-        return self.outer_header.inner_frame_length_int == self.inner_header.inner_frame_length_int
-
-    @property
-    def is_crc_valid(self) -> bool:
-        """True if the declared CRC matches the value calculated from current fields."""
-        return self.inner_header.crc_int == self.calculate_crc()
+        return self.header.inner_frame_length_int == self.inner_frame.header.inner_frame_length_int
 
     @property
     def is_valid(self) -> bool:
         """True if all validation checks pass."""
         return (
-                self.is_size_valid
-                and self.is_outer_magic_valid
-                and self.is_inner_magic_valid
-                and self.is_inner_frame_length_valid
-                and self.is_inner_frame_length_consistent
-                and self.is_crc_valid
+            self.header.is_valid
+            and self.inner_frame.is_valid
+            and self.is_inner_frame_length_consistent
         )
+
 
     ### To string
     def __str__(self) -> str:
         """Human-readable representation of all frame fields."""
-        payload_hex = self.encrypted_payload.hex()
+        payload_hex = self.inner_frame.encrypted_payload.hex()
         # Truncate long payloads for readability
         if len(payload_hex) > 64:
-            payload_hex = payload_hex[:64] + f"... ({len(self.encrypted_payload)} bytes)"
+            payload_hex = payload_hex[:64] + f"... ({len(self.inner_frame.encrypted_payload)} bytes)"
 
         return (
-            f"Frame\n"
+            f"OuterFrame\n"
             f"  ## Outer Header ##\n"
-            f"  magic                       {self.outer_header.magic.hex()}\n"
-            f"  padding                     {self.outer_header.padding.hex()}\n"
-            f"  inner_frame_length          {self.outer_header.inner_frame_length.hex():<12}  ({self.outer_header.inner_frame_length_int})\n"
-            f"  response_inner_frame_length {self.outer_header.response_inner_frame_length.hex():<12}  ({self.outer_header.response_inner_frame_length_int})\n"
+            f"  magic                       {self.header.magic.hex()}\n"
+            f"  padding                     {self.header.padding.hex()}\n"
+            f"  inner_frame_length          {self.header.inner_frame_length.hex():<12}  ({self.header.inner_frame_length_int})\n"
+            f"  response_inner_frame_length {self.header.response_inner_frame_length.hex():<12}  ({self.header.response_inner_frame_length_int})\n"
             f"  ## Inner Header ##\n"
-            f"  magic                       {self.inner_header.magic.hex()}\n"
-            f"  crc                         {self.inner_header.crc.hex():<12}  (0x{self.inner_header.crc_int:04X})\n"
-            f"  operation                   {self.inner_header.operation.hex()} ({self.inner_header.operation_str})\n"
-            f"  inner_frame_length          {self.inner_header.inner_frame_length.hex():<12}  ({self.inner_header.inner_frame_length_int})\n"
+            f"  magic                       {self.inner_frame.header.magic.hex()}\n"
+            f"  crc                         {self.inner_frame.header.crc.hex():<12}  (0x{self.inner_frame.header.crc_int:04X})\n"
+            f"  operation                   {self.inner_frame.header.operation.hex()} ({self.inner_frame.header.operation_str})\n"
+            f"  inner_frame_length          {self.inner_frame.header.inner_frame_length.hex():<12}  ({self.inner_frame.header.inner_frame_length_int})\n"
             f"  ## Encrypted Payload ({self.encrypted_payload_length} bytes) ##\n"
             f"  encrypted_payload           {payload_hex}\n"
         )
 
+
     ### Methods
-    ## CRC
-    def calculate_crc(self) -> int:
-        """
-        :return: Calculated CRC-16/ARC from current field values.
-        """
-        return _crc16_arc(
-            self.inner_header_raw_bytes[self.InnerHeader.CRC_COVERAGE] + self.encrypted_payload
-        )
-
-    def update_crc(self) -> Self:
-        """
-        Updates the stored CRC bytes to match the value calculated from current fields.
-        :return: Self with updated CRC-16/ARC from current fields.
-        """
-        self.inner_header.crc_int = self.calculate_crc()
-        return self
-
     ## Validation
     def validate(self) -> None:
         """
-        Validates the frame raising ValueError on the first failed check.
+        Validates the outer frame raising ValueError on the first failed check.
         :raises ValueError: If a checked property fails the check.
         """
-        if not self.is_size_valid:
-            raise ValueError(f"Frame too short: need ≥ {self.MIN_SIZE} bytes.")
-        if not self.is_outer_magic_valid:
-            raise ValueError(
-                f"Outer magic mismatch: expected {self.OuterHeader.MAGIC.hex()}, "
-                f"got {self.outer_header.magic.hex()}."
-            )
-        if not self.is_inner_magic_valid:
-            raise ValueError(
-                f"Inner magic mismatch: expected {self.InnerHeader.MAGIC.hex()}, "
-                f"got {self.inner_header.magic.hex()}."
-            )
-        if not self.is_inner_frame_length_valid:
-            actual = self.InnerHeader.SIZE + len(self.encrypted_payload)
-            raise ValueError(
-                f"Inner frame length mismatch: "
-                f"declared {self.inner_header.inner_frame_length_int}, actual {actual}."
-            )
+        self.header.validate()
+        self.inner_frame.validate()
         if not self.is_inner_frame_length_consistent:
             raise ValueError(
                 f"Inner frame length inconsistency: "
-                f"outer = {self.outer_header.inner_frame_length_int}, "
-                f"inner = {self.inner_header.inner_frame_length_int}."
-            )
-        if not self.is_crc_valid:
-            raise ValueError(
-                f"CRC mismatch: declared 0x{self.inner_header.crc_int:04X}, "
-                f"computed 0x{self.calculate_crc():04X}."
+                f"outer = {self.header.inner_frame_length_int}, "
+                f"inner = {self.inner_frame.header.inner_frame_length_int}."
             )
 
     ## Serialization
     def to_bytes(self) -> bytes:
         """
-        Recomputes CRC from current field values then assembles the complete wire frame as bytes.
-        :return: Assembled frame bytes with updated CRC.
+        Recomputes CRC from current field values then assembles the complete wire outer frame as bytes.
+        :return: Assembled outer frame bytes with updated CRC.
         """
-        self.update_crc()
-        return self.raw_bytes
+        return b"".join((
+            self.header.raw_bytes,
+            self.inner_frame.to_bytes(),
+        ))

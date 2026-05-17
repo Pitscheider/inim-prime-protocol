@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Final
+from typing import Final, Self
 
 from prime.protocol.const import CommandOperation, Panel
 from .cipher import Cipher
-from .frame import Frame
+from .frame import OuterFrame, InnerHeader, InnerFrame, Frame
 from .payload import ReadRequestPayload, ReadResponsePayload, CommandRequestPayload, ChecksummedPayload
 from .transport import Transport
 
@@ -17,6 +17,7 @@ class Protocol:
         "_logger",
         "_crypto",
         "_transport",
+        "_use_outer_frame",
     )
 
     def __init__(
@@ -24,6 +25,7 @@ class Protocol:
             host: str,
             password: str,
             port: int,
+            use_outer_frame: bool,
             logger: logging.Logger | None = None,
             connect_timeout: float = Transport.DEFAULT_CONNECT_TIMEOUT,
             receive_timeout: float = Transport.DEFAULT_RECEIVE_TIMEOUT,
@@ -47,6 +49,8 @@ class Protocol:
         # AES-128-CBC cipher, owns the key and IV derived from the password.
         # The class never sees the raw password after this point.
         self._crypto = Cipher(password)
+
+        self._use_outer_frame = use_outer_frame
 
         # TCP transport, owns the connection lifecycle and raw byte exchange.
         self._transport = Transport(
@@ -72,13 +76,14 @@ class Protocol:
 
     async def connect(
             self,
-    ) -> None:
+    ) -> Self:
         """
         Opens the TCP connection to the panel.
         :raises TimeoutError:   If the connection times out.
         :raises OSError:        If the connection is refused or the host is unreachable.
         """
         await self._transport.connect()
+        return self
 
     def disconnect(
             self,
@@ -104,6 +109,48 @@ class Protocol:
     # ------------------------------------------------------------------
     # Raw read / command primitives
     # ------------------------------------------------------------------
+    async def exchange_payload(
+            self,
+            payload: bytes,
+            operation: InnerHeader.Operation,
+            response_payload_length: int | None = None,
+    ) -> bytes:
+        # Encrypt the payload using AES-128-CBC
+        encrypted_payload = self._crypto.encrypt(
+            plaintext = payload,
+        )
+
+        inner_frame = InnerFrame.build(
+            encrypted_payload = encrypted_payload,
+            operation = operation,
+        )
+
+        frame: Frame = inner_frame
+
+        if self._use_outer_frame:
+            frame = OuterFrame.build(
+                inner_frame = inner_frame,
+                response_payload_length = response_payload_length,
+            )
+
+        # Send the frame and receive the raw response
+        response_frame = await self._transport.exchange_frame(
+            frame.to_bytes(),
+            frame.header_type,
+        )
+
+        response_encrypted_payload: bytes
+        # Strip headers and validate, returns the encrypted response payload
+        if self._use_outer_frame:
+            response_encrypted_payload = OuterFrame.disassemble(response_frame)
+        else:
+            response_encrypted_payload = InnerFrame.disassemble(response_frame)
+
+        # Decrypt and return the plaintext response
+        response_payload = self._crypto.decrypt(response_encrypted_payload)
+
+        return response_payload
+
 
     async def execute_command(
             self,
@@ -118,26 +165,11 @@ class Protocol:
             pin = pin,
         )
 
-        # Encrypt the payload using AES-128-CBC
-        encrypted_payload = self._crypto.encrypt(
-            plaintext = payload,
-        )
-
-        # Assemble the complete wire frame (outer header + inner header + encrypted payload)
-        frame = Frame.assemble(
+        response_payload = await self.exchange_payload(
+            payload = payload,
+            operation = InnerHeader.Operation.COMMAND,
             response_payload_length = response_payload_length,
-            encrypted_payload = encrypted_payload,
-            operation = Frame.InnerHeader.Operation.COMMAND,
         )
-
-        # Send the frame and receive the raw response
-        response_frame = await self._transport.exchange_frame(frame)
-
-        # Strip headers and validate, returns the encrypted response payload
-        response_encrypted_payload = Frame.disassemble(response_frame)
-
-        # Decrypt and return the plaintext response
-        response_payload = self._crypto.decrypt(response_encrypted_payload)
 
         return response_payload
 
@@ -190,37 +222,22 @@ class Protocol:
         """
 
         # Build the plaintext read request payload
-        plaintext_payload = ReadRequestPayload.assemble(
+        payload = ReadRequestPayload.assemble(
             address = address,
             chunk_length = chunk_length,
             transfer_length = transfer_length,
         )
 
-        # Encrypt the payload
-        encrypted_payload = self._crypto.encrypt(
-            plaintext = plaintext_payload,
+        response_payload_bytes = await self.exchange_payload(
+            payload = payload,
+            operation = InnerHeader.Operation.READ,
+            response_payload_length = chunk_length + ChecksummedPayload.CHECKSUM_SIZE,
         )
-
-        # Assemble the complete wire frame
-        # Response payload length is chunk size + 1 (checksum field)
-        frame = Frame.assemble(
-            encrypted_payload = encrypted_payload,
-            operation = Frame.InnerHeader.Operation.READ,
-            response_payload_length = chunk_length + ChecksummedPayload.Layout.CHECKSUM_SIZE,
-        )
-
-        # Send the frame and receive the raw response
-        response_frame = await self._transport.exchange_frame(frame)
-
-        # Strip headers and validate, returns the encrypted response payload
-        response_encrypted_payload = Frame.disassemble(response_frame)
-
-        # Decrypt plaintext bytes
-        response_payload_bytes = self._crypto.decrypt(response_encrypted_payload)
 
         # Validate the response payload, strip checksum, and returns read bytes
         return ReadResponsePayload.disassemble(response_payload_bytes)
 
+    
     # ------------------------------------------------------------------
     # Context manager
     # ------------------------------------------------------------------

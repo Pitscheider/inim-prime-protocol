@@ -34,10 +34,13 @@ class Panel:
 
     DEFAULT_MASTER_PIN: Final[DefaultMasterPin] = DefaultMasterPin()
 
-    MAX_PARTITION_NUMBER: Final[int] = 30
-
 
 class AddressTable:
     ENTRY_SIZE: Final[int] = 4
 
-    GET_PARTITION_NAMES: Final[int] = 436216852
+    GET_PARTITION_LABELS: Final[int] = 436216852
+    GET_TERMINAL_LABELS: Final[int] = 436216856
+
+class Memory:
+    LABEL_SIZE: Final[int] = 16
+

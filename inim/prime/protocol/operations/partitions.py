@@ -2,11 +2,14 @@ import asyncio
 import struct
 from typing import Final
 
+from const import Memory
 from prime.protocol.const import AddressTable, Panel, Encoding, CommandOperation
 from prime.protocol.models import PartitionMode, PartitionStatus
 from prime.protocol.models.partitions import Partition
 from prime.protocol.wire.protocol import Protocol
 from . import resolve_address
+
+PARTITIONS_MAX_NUMBER: Final[int] = 30
 
 PARTITION_MODE_MAP = {
     0x01: PartitionMode.TOTAL,
@@ -25,10 +28,10 @@ async def set_partition_modes(
         partition_modes: dict[int, PartitionMode],
         pin: str | Panel.DefaultMasterPin = Panel.DEFAULT_MASTER_PIN,
 ) -> None:
-    command_data = bytearray(Panel.MAX_PARTITION_NUMBER)
+    command_data = bytearray(PARTITIONS_MAX_NUMBER)
 
     for idx, partition_mode in partition_modes.items():
-        if idx < 1 or idx > Panel.MAX_PARTITION_NUMBER:
+        if idx < 1 or idx > PARTITIONS_MAX_NUMBER:
             raise IndexError(f'Partition mode {idx} out of range')
 
         command_data[idx - 1] = PARTITION_MODE_REVERSE_MAP[partition_mode]
@@ -47,7 +50,7 @@ async def reset_partitions(
 ) -> None:
     partitions_to_reset_int = 0
     for idx in partition_ids:
-        if idx < 1 or idx > Panel.MAX_PARTITION_NUMBER:
+        if idx < 1 or idx > PARTITIONS_MAX_NUMBER:
             raise IndexError(f'Partition id {idx} out of range')
         partitions_to_reset_int += 2 ** (idx - 1)
 
@@ -67,7 +70,7 @@ async def get_partition_statuses(
     ### Constants
     HEADER_SIZE: Final[int] = 18
     PARTITION_SIZE: Final[int] = 3
-    TOTAL_SIZE: Final[int] = HEADER_SIZE + PARTITION_SIZE * Panel.MAX_PARTITION_NUMBER  # 108
+    TOTAL_SIZE: Final[int] = HEADER_SIZE + PARTITION_SIZE * PARTITIONS_MAX_NUMBER  # 108
 
     CONFIGURED_MASK: Final[int] = 0x10
     ALARM_MASK: Final[int] = 0x01
@@ -113,17 +116,16 @@ async def get_partition_statuses(
 
 
 async def get_partition_names(protocol: Protocol) -> dict[int, str]:
-    NAME_SIZE: Final[int] = 16
 
-    address = await resolve_address(protocol, AddressTable.GET_PARTITION_NAMES)
-    response = await protocol.read_memory(address, Panel.MAX_PARTITION_NUMBER * NAME_SIZE)
+    address = await resolve_address(protocol, AddressTable.GET_PARTITION_LABELS)
+    response = await protocol.read_memory(address, PARTITIONS_MAX_NUMBER * Memory.LABEL_SIZE)
 
     partition_names: dict[int, str] = {}
 
-    for index in range(Panel.MAX_PARTITION_NUMBER):
-        partition_name_bytes = response[index * NAME_SIZE:(index + 1) * NAME_SIZE]
+    for index in range(PARTITIONS_MAX_NUMBER):
+        partition_name_bytes = response[index * Memory.LABEL_SIZE:(index + 1) * Memory.LABEL_SIZE]
 
-        if partition_name_bytes != bytes(NAME_SIZE):
+        if partition_name_bytes != bytes(Memory.LABEL_SIZE):
             partition_name = partition_name_bytes.decode("ascii").rstrip()
             partition_names[index + 1] = partition_name
 
