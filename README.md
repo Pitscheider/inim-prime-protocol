@@ -11,7 +11,7 @@ An unofficial Python library for communicating with **Inim Prime** alarm panels 
 
 ## Background
 
-Inim alarm panels can be controlled via an HTTP-based API when a Prime LAN network card is installed. I previously developed a Python library for interacting with a Prime panel using this interface: https://github.com/Pitscheider/inim_prime_api.
+Inim alarm panels can be controlled via an HTTP-based API when a Prime LAN network card is installed. I previously developed a Python library for interacting with a Prime panel using this interface: https://github.com/Pitscheider/inim-prime-primelan.
 
 In practice, however, this API is slow, incomplete, and partially unreliable on certain firmware versions (e.g. 4.07). The native protocol used by Inim Prime STUDIO communicates directly over TCP and is significantly faster and more capable.
 
@@ -23,7 +23,7 @@ The goal is to provide a Home Assistant integration that communicates with Inim 
 
 ## What Is Implemented
 
-**Wire layer** (`inim/prime/protocol/wire/`)
+**Wire layer** (`inim/prime/native/wire/`)
 
 - AES-128-CBC encryption and decryption, with key and IV derived from the panel password
 - CRC-16/ARC frame integrity checking
@@ -32,7 +32,7 @@ The goal is to provide a Home Assistant integration that communicates with Inim 
 - Command request and response payloads
 - Async TCP transport with connection lifecycle, rate limiting, and chunked memory reads
 
-**Operations** (`inim/prime/protocol/operations/`)
+**Operations** (`inim/prime/native/operations/`)
 
 - `get_panel_info` — serial number, firmware version, model
 - `get_partition_names` — names of configured partitions
