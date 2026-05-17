@@ -5,7 +5,8 @@ from typing import Final, Self
 
 from prime.protocol.const import CommandOperation, Panel
 from .cipher import Cipher
-from .frame import OuterFrame, InnerHeader, InnerFrame, Frame
+from .frame import OuterFrame, InnerFrame, Frame
+from const import FrameOperation
 from .payload import ReadRequestPayload, ReadResponsePayload, CommandRequestPayload, ChecksummedPayload
 from .transport import Transport
 
@@ -112,7 +113,7 @@ class Protocol:
     async def exchange_payload(
             self,
             payload: bytes,
-            operation: InnerHeader.Operation,
+            operation: FrameOperation,
             response_payload_length: int | None = None,
     ) -> bytes:
         # Encrypt the payload using AES-128-CBC
@@ -167,7 +168,7 @@ class Protocol:
 
         response_payload = await self.exchange_payload(
             payload = payload,
-            operation = InnerHeader.Operation.COMMAND,
+            operation = FrameOperation.COMMAND,
             response_payload_length = response_payload_length,
         )
 
@@ -230,7 +231,7 @@ class Protocol:
 
         response_payload_bytes = await self.exchange_payload(
             payload = payload,
-            operation = InnerHeader.Operation.READ,
+            operation = FrameOperation.READ,
             response_payload_length = chunk_length + ChecksummedPayload.CHECKSUM_SIZE,
         )
 

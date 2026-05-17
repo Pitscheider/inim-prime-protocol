@@ -416,7 +416,7 @@ class CommandRequestPayload(BasePayload):
     Plaintext payload for a command request.
 
     Wire layout (variable length):
-      Operation   [0:4]    uint32 LE
+      FrameOperation   [0:4]    uint32 LE
       PIN         [4:10]   6 bytes, digit-per-byte, 0xFF-padded; or PIN_ABSENT
       Data        [10:]    operation-specific bytes (may be empty)
 

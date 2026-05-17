@@ -2,13 +2,12 @@ import asyncio
 
 from prime.protocol.wire import Protocol
 from prime.protocol.wire import Cipher
-from prime.protocol.wire import Transport  # noqa: F401 – kept for potential use
 from prime.protocol import operations
 from prime.protocol.models import PartitionMode
 from tools.filters import PacketFilter
 from tools.packets import Packet, load_packets, decrypt_packets
 from tools.utils import Config, get_yaml_config
-
+from wire.frame import Frame, OuterFrame, InnerFrame
 
 # ---------------------------------------------------------------------------
 # Display helpers
@@ -55,9 +54,8 @@ def print_payloads(packets: list[Packet]) -> None:
 
     for packet in packets:
         print(f"{packet.source} --> {packet.destination}")
-        print(f"Operation: {packet.frame.inner_frame.header.operation_str}")
-        print(f"Inner frame length: {packet.frame.header.inner_frame_length_int}")
-        print(f"Response inner frame length: {packet.frame.header.response_inner_frame_length_int}")
+        print(f"Operation: {packet.frame.operation_str}")
+        print(f"Frame length: {packet.frame.length}")
         print(f"Payload length: {len(packet.payload)}")
         print(packet.payload.hex(" "))
         print()
@@ -238,6 +236,7 @@ async def repl(config: Config) -> None:
     filtered_packets: list[Packet] | None = None
     active_filter: PacketFilter | None = None
     cipher = Cipher(config.password)
+    frame_type: type[Frame] = OuterFrame if config.use_outer_frame else InnerFrame
     protocol = Protocol(
         host=config.host,
         password=config.password,
@@ -267,7 +266,7 @@ async def repl(config: Config) -> None:
 
         elif choice == "load_packets":
             try:
-                packets = load_packets()
+                packets = load_packets(frame_type)
                 if packets is not None:
                     decrypt_packets(packets, cipher)
 

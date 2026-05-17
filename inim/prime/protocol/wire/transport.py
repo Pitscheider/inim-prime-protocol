@@ -5,7 +5,7 @@ import logging
 import socket
 from typing import Self, ClassVar
 
-from .frame import Header
+from .header import Header
 
 
 class Transport:
