@@ -95,6 +95,7 @@ host: 192.168.1.100   # IP address of your panel
 password: yourpass    # Panel connection password (default: pass)
 port: 6004            # TCP port (default: 6004)
 pin: "1234"           # User PIN for arming/disarming (optional)
+use_outer_frame: true # Set false if using the OnboardLAN, true if using the PrimeLAN
 poll: 1.0             # Poll interval in seconds (for future use)
 ```
 
