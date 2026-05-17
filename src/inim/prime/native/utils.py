@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from const import CRC16_TABLE
+from inim.prime.native.const import CRC16_TABLE
 
 
 def slice_size(s: slice) -> int:
