@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0c904636-8b4a-4c5f-878c-ed2f9cba7311" name="Changes" comment="Updated idea" />
+    <list default="true" id="0c904636-8b4a-4c5f-878c-ed2f9cba7311" name="Changes" comment="Updated idea">
+      <change afterPath="$PROJECT_DIR$/src/inim/prime/native/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inim-prime-native.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inim-prime-native.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -50,7 +54,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
     "git-widget-placeholder": "main",
-    "last_opened_file_path": "/home/user/PycharmProjects/inim-prime-native",
+    "last_opened_file_path": "/home/user/PycharmProjects/ha_inim_prime",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "preferences.sourceCode.Python",
     "vue.rearranger.settings.migration": "true"
@@ -425,6 +429,11 @@
       <workItem from="1779045130277" duration="38000" />
       <workItem from="1779045187423" duration="98000" />
       <workItem from="1779045297753" duration="631000" />
+      <workItem from="1779045966790" duration="70000" />
+      <workItem from="1779193087107" duration="184000" />
+      <workItem from="1779193284192" duration="24000" />
+      <workItem from="1779193321221" duration="10000" />
+      <workItem from="1779193340947" duration="1297000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor">
       <option name="closed" value="true" />
@@ -474,7 +483,23 @@
       <option name="project" value="LOCAL" />
       <updated>1779045921976</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Updated idea">
+      <option name="closed" value="true" />
+      <created>1779045973493</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1779045973493</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Updated idea">
+      <option name="closed" value="true" />
+      <created>1779045986568</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1779045986568</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
