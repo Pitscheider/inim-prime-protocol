@@ -26,7 +26,7 @@ PARTITION_MODE_REVERSE_MAP = {
 async def set_partition_modes(
         protocol: Protocol,
         partition_modes: dict[int, PartitionMode],
-        pin: str | Panel.DefaultMasterPin = Panel.DEFAULT_MASTER_PIN,
+        pin: str | None = None,
 ) -> None:
     command_data = bytearray(PARTITIONS_MAX_NUMBER)
 
@@ -36,7 +36,7 @@ async def set_partition_modes(
 
         command_data[idx - 1] = PARTITION_MODE_REVERSE_MAP[partition_mode]
 
-    await protocol.execute_command(
+    response = await protocol.execute_command_with_pin(
         operation = CommandOperation.SET_PARTITION_MODES,
         data = command_data,
         pin = pin,
@@ -46,7 +46,7 @@ async def set_partition_modes(
 async def reset_partitions(
         protocol: Protocol,
         partition_ids: set[int],
-        pin: str | Panel.DefaultMasterPin = Panel.DEFAULT_MASTER_PIN,
+        pin: str | None = None,
 ) -> None:
     partitions_to_reset_int = 0
     for idx in partition_ids:
@@ -56,7 +56,7 @@ async def reset_partitions(
 
     command_data = struct.pack(Encoding.UINT32_LE, partitions_to_reset_int)
 
-    await protocol.execute_command(
+    await protocol.execute_command_with_pin(
         operation = CommandOperation.RESET_PARTITIONS,
         data = command_data,
         pin = pin,
@@ -65,12 +65,11 @@ async def reset_partitions(
 
 async def get_partition_statuses(
         protocol: Protocol,
-        pin: str | Panel.DefaultMasterPin = Panel.DEFAULT_MASTER_PIN,
+        pin: str | None = None,
 ) -> dict[int, PartitionStatus]:
     ### Constants
-    HEADER_SIZE: Final[int] = 18
     PARTITION_SIZE: Final[int] = 3
-    TOTAL_SIZE: Final[int] = HEADER_SIZE + PARTITION_SIZE * PARTITIONS_MAX_NUMBER  # 108
+    TOTAL_SIZE: Final[int] = PARTITION_SIZE * PARTITIONS_MAX_NUMBER  # 90
 
     CONFIGURED_MASK: Final[int] = 0x10
     ALARM_MASK: Final[int] = 0x01
@@ -95,7 +94,7 @@ async def get_partition_statuses(
         )
 
     ### Main function
-    response = await protocol.execute_command(
+    response = await protocol.execute_command_with_pin(
         operation = CommandOperation.GET_PARTITION_STATUSES,
         pin = pin,
         response_payload_length = TOTAL_SIZE,
@@ -104,7 +103,7 @@ async def get_partition_statuses(
     partitions: dict[int, PartitionStatus] = {}
 
     for idx, offset in enumerate(
-            range(HEADER_SIZE, TOTAL_SIZE, PARTITION_SIZE),
+            range(0, TOTAL_SIZE, PARTITION_SIZE),
             start = 1,
     ):
         chunk = response[offset:offset + PARTITION_SIZE]

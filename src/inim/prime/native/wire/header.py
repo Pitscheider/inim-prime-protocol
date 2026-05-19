@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Self
 
 from inim.prime.native.const import Encoding, FrameOperation
-from inim.prime.native.utils import slice_size
+from inim.prime.native.utils import next_slice
 
 
 @dataclass(slots = True)
@@ -42,32 +42,32 @@ class OuterHeader(Header):
 
     @dataclass(frozen = True)
     class _Layout:
-        magic: slice
-        padding: slice
-        inner_frame_length: slice
-        response_inner_frame_length: slice
+        magic_size: int
+        padding_size: int
+        inner_frame_length_size: int
+        response_inner_frame_length_size: int
 
         @property
-        def magic_size(self) -> int:
-            return slice_size(self.magic)
+        def magic(self) -> slice:
+            return next_slice(0, self.magic_size)
 
         @property
-        def padding_size(self) -> int:
-            return slice_size(self.padding)
+        def padding(self) -> slice:
+            return next_slice(self.magic, self.padding_size)
 
         @property
-        def inner_frame_length_size(self) -> int:
-            return slice_size(self.inner_frame_length)
+        def inner_frame_length(self) -> slice:
+            return next_slice(self.padding, self.inner_frame_length_size)
 
         @property
-        def response_inner_frame_length_size(self) -> int:
-            return slice_size(self.response_inner_frame_length)
+        def response_inner_frame_length(self) -> slice:
+            return next_slice(self.inner_frame_length, self.response_inner_frame_length_size)
 
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        magic = slice(0, 2),
-        padding = slice(2, 4),
-        inner_frame_length = slice(4, 8),
-        response_inner_frame_length = slice(8, 12),
+        magic_size = 2,
+        padding_size = 2,
+        inner_frame_length_size = Encoding.UINT32_LE_SIZE,
+        response_inner_frame_length_size = Encoding.UINT32_LE_SIZE,
     )
 
 
@@ -200,32 +200,32 @@ class InnerHeader(Header):
     ### Constants
     @dataclass(frozen = True)
     class _Layout:
-        magic: slice
-        crc: slice
-        operation: slice
-        inner_frame_length: slice
+        magic_size: int
+        crc_size: int
+        operation_size: int
+        inner_frame_length_size: int
 
         @property
-        def magic_size(self) -> int:
-            return slice_size(self.magic)
+        def magic(self) -> slice:
+            return next_slice(0, self.magic_size)
 
         @property
-        def crc_size(self) -> int:
-            return slice_size(self.crc)
+        def crc(self) -> slice:
+            return next_slice(self.magic, self.crc_size)
 
         @property
-        def operation_size(self) -> int:
-            return slice_size(self.operation)
+        def operation(self) -> slice:
+            return next_slice(self.crc, self.operation_size)
 
         @property
-        def inner_frame_length_size(self) -> int:
-            return slice_size(self.inner_frame_length)
+        def inner_frame_length(self) -> slice:
+            return next_slice(self.operation, self.inner_frame_length_size)
 
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        magic = slice(0, 2),
-        crc = slice(2, 4),
-        operation = slice(4, 6),
-        inner_frame_length = slice(6, 10),
+        magic_size = 2,
+        crc_size = Encoding.UINT16_LE_SIZE,
+        operation_size = Encoding.UINT16_LE_SIZE,
+        inner_frame_length_size = Encoding.UINT32_LE_SIZE,
     )
 
     SIZE: ClassVar[int] = 10

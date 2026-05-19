@@ -5,8 +5,10 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import ClassVar, Self
 
+from scapy.layers.kerberos import Checksum
+
 from inim.prime.native.const import Encoding, CommandOperation, Panel
-from inim.prime.native.utils import slice_size
+from inim.prime.native.utils import next_slice, previous_slice
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +107,15 @@ class ChecksummedPayload(BasePayload, ABC):
     subclasses only need to override it if their meaningful content
     is something other than the raw validated bytes.
     """
-    CHECKSUM_SIZE: ClassVar[int] = 1
+
+    @dataclass(frozen = True)
+    class _Layout:
+        checksum_size: int
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        checksum_size = 1,
+    )
+
     CHECKSUM_COVERAGE: ClassVar[slice]  # subclasses define the exact coverage
 
     # ------------------------------------------------------------------
@@ -188,46 +198,45 @@ class ReadRequestPayload(ChecksummedPayload):
 
     @dataclass(frozen = True)
     class _Layout:
-        address: slice
-        transfer_length: slice
-        chunk_length: slice
-        padding: slice
-        marker: slice
-        checksum: slice
+        address_size: int
+        transfer_length_size: int
+        chunk_length_size: int
+        padding_size: int
+        marker_size: int
+        checksum_size: int
 
         @property
-        def address_size(self) -> int:
-            return slice_size(self.address)
+        def address(self) -> slice:
+            return next_slice(0, self.address_size)
 
         @property
-        def transfer_length_size(self) -> int:
-            return slice_size(self.transfer_length)
+        def transfer_length(self) -> slice:
+            return next_slice(self.address, self.transfer_length_size)
 
         @property
-        def chunk_length_size(self) -> int:
-            return slice_size(self.chunk_length)
+        def chunk_length(self) -> slice:
+            return next_slice(self.transfer_length, self.chunk_length_size)
 
         @property
-        def padding_size(self) -> int:
-            return slice_size(self.padding)
+        def padding(self) -> slice:
+            return next_slice(self.chunk_length, self.padding_size)
 
         @property
-        def marker_size(self) -> int:
-            return slice_size(self.marker)
+        def marker(self) -> slice:
+            return next_slice(self.padding, self.marker_size)
 
         @property
-        def checksum_size(self) -> int:
-            return slice_size(self.checksum)
+        def checksum(self) -> slice:
+            return next_slice(self.marker, self.checksum_size)
 
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        address = slice(0, 8),
-        transfer_length = slice(8, 12),
-        chunk_length = slice(12, 16),
-        padding = slice(16, 18),
-        marker = slice(18, 19),
-        checksum = slice(19, 20),
+        address_size = Encoding.UINT64_LE_SIZE,
+        transfer_length_size = Encoding.UINT32_LE_SIZE,
+        chunk_length_size = Encoding.UINT32_LE_SIZE,
+        padding_size = 2,
+        marker_size = 1,
+        checksum_size = ChecksummedPayload.LAYOUTS.checksum_size,
     )
-
 
     MARKER: ClassVar[bytes] = b"\x11"
     CHECKSUM_COVERAGE: ClassVar[slice] = slice(LAYOUTS.address.start, LAYOUTS.marker.stop)
@@ -348,12 +357,18 @@ class ReadResponsePayload(ChecksummedPayload):
 
     @dataclass(frozen = True)
     class _Layout:
-        data: slice
-        checksum: slice
+        checksum_size: int
+
+        @property
+        def checksum(self) -> slice:
+            return previous_slice(None, self.checksum_size)
+
+        @property
+        def data(self) -> slice:
+            return previous_slice(self.checksum, None)
 
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        data = slice(0, -1),
-        checksum = slice(-1, None),
+        checksum_size = ChecksummedPayload.LAYOUTS.checksum_size,
     )
 
     CHECKSUM_COVERAGE: ClassVar[slice] = slice(0, -1)  # everything except the last byte
@@ -412,86 +427,60 @@ class ReadResponsePayload(ChecksummedPayload):
 
 @dataclass(slots = True)
 class CommandRequestPayload(BasePayload):
-    """
-    Plaintext payload for a command request.
 
-    Wire layout (variable length):
-      FrameOperation   [0:4]    uint32 LE
-      PIN         [4:10]   6 bytes, digit-per-byte, 0xFF-padded; or PIN_ABSENT
-      Data        [10:]    operation-specific bytes (may be empty)
-
-    Note: command payloads carry no checksum — this is by Inim wire design.
-    """
-
+    ### Constants
     @dataclass(frozen = True)
     class _Layout:
-        operation: slice
-        pin: slice
-        data: slice
+        operation_size: int
 
         @property
-        def operation_size(self) -> int:
-            return slice_size(self.operation)
+        def operation(self) -> slice:
+            return next_slice(0, self.operation_size)
 
         @property
-        def pin_size(self) -> int:
-            return slice_size(self.pin)
-
+        def data(self) -> slice:
+            return next_slice(self.operation, None)
 
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        operation = slice(0, 4),
-        pin = slice(4, 10),
-        data = slice(10, None),
+        operation_size = Encoding.UINT32_LE_SIZE,
     )
 
-    PIN_PADDING: ClassVar[int] = 0xFF
 
+    ### Attributes
     operation: bytes = bytes(LAYOUTS.operation_size)
-    pin: bytes = b""
     data: bytes = b""
 
-    # ------------------------------------------------------------------
-    # High-level entry points
-    # ------------------------------------------------------------------
 
+    ### Main
     @classmethod
     def assemble(
             cls,
             operation: CommandOperation,
             data: bytes | None = None,
-            pin: str | None | Panel.DefaultMasterPin = Panel.DefaultMasterPin(),
     ) -> bytes:
-        """Builds the payload and returns the wire bytes. No checksum is applied."""
-        return cls.build(operation = operation, data = data, pin = pin).to_bytes()
+        return cls.build(operation = operation, data = data).to_bytes()
 
     @classmethod
-    def disassemble(cls, raw: bytes) -> tuple[CommandOperation, bytes | None, str | None | Panel.DefaultMasterPin]:
+    def disassemble(cls, raw: bytes) -> tuple[CommandOperation, bytes | None]:
         """
         Parses a raw command request payload.
         :param raw: Raw command request payload bytes.
-        :return:    (operation, data, pin) tuple.
+        :return:    (operation, data) tuple.
         """
         instance = cls.from_bytes(raw)
-        return instance.operation_enum, instance.data or None, instance.pin_str
+        return instance.operation_enum, instance.data or None
 
-    # ------------------------------------------------------------------
-    # Constructors
-    # ------------------------------------------------------------------
 
+    ### Constructors
     @classmethod
     def build(
             cls,
             operation: CommandOperation,
             data: bytes | None = None,
-            pin: str | None | Panel.DefaultMasterPin = Panel.DEFAULT_MASTER_PIN,
     ) -> Self:
         """Constructs a payload object from logical parameters."""
         payload = cls()
         payload.operation_enum = operation
-        if isinstance(pin, Panel.DefaultMasterPin):
-            payload.pin = bytes(pin)
-        elif pin is not None:
-            payload.pin_str = pin
         if data is not None:
             payload.data = data
         return payload
@@ -501,14 +490,12 @@ class CommandRequestPayload(BasePayload):
         """Parses raw bytes into a payload object."""
         return cls(
             operation = raw[cls.LAYOUTS.operation],
-            pin = raw[cls.LAYOUTS.pin],
             data = raw[cls.LAYOUTS.data],
         )
 
-    # ------------------------------------------------------------------
-    # Typed field accessors
-    # ------------------------------------------------------------------
 
+    ### Properties
+    ## Helpers
     @property
     def operation_int(self) -> int:
         return struct.unpack(Encoding.UINT32_LE, self.operation)[0]
@@ -528,11 +515,103 @@ class CommandRequestPayload(BasePayload):
     def operation_enum(self, operation: CommandOperation) -> None:
         self.operation = struct.pack(Encoding.UINT32_LE, operation.value)
 
+    ## Serialization
     @property
-    def pin_str(self) -> str | None | Panel.DefaultMasterPin:
-        if self.pin == bytes(Panel.DEFAULT_MASTER_PIN):
-            return Panel.DEFAULT_MASTER_PIN
-        if not self.pin:
+    def raw_bytes(self) -> bytes:
+        return b"".join((self.operation, self.data))
+
+
+
+@dataclass(slots = True)
+class CommandWithPinRequestPayload(CommandRequestPayload):
+
+    ### Constants
+    @dataclass(frozen = True)
+    class _Layout:
+        operation_size: int
+        pin_size: int
+
+        @property
+        def operation(self) -> slice:
+            return next_slice(0, self.operation_size)
+
+        @property
+        def pin(self) -> slice:
+            return next_slice(self.operation, self.pin_size)
+
+        @property
+        def data(self) -> slice:
+            return next_slice(self.pin, None)
+
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        operation_size = CommandRequestPayload.LAYOUTS.operation_size,
+        pin_size = 6,
+    )
+
+    PIN_PADDING: ClassVar[int] = 0xFF
+
+
+    ### Attributes
+    pin: bytes = Panel.DEFAULT_MASTER_PIN
+
+
+    ### Main
+    @classmethod
+    def assemble(
+            cls,
+            operation: CommandOperation,
+            pin: str | None = None,
+            data: bytes | None = None,
+    ) -> bytes:
+        """Builds the payload and returns the wire bytes. No checksum is applied."""
+        return cls.build(operation = operation, data = data, pin = pin).to_bytes()
+
+    @classmethod
+    def disassemble(cls, raw: bytes) -> bytes:
+        """
+        Parses a raw command request payload.
+        :param raw: Raw command request payload bytes.
+        :return:    data bytes
+        """
+        instance = cls.from_bytes(raw)
+
+        return instance.data
+
+
+    ### Constructors
+    @classmethod
+    def build(
+            cls,
+            operation: CommandOperation,
+            pin: str | None = None,
+            data: bytes | None = None,
+    ) -> Self:
+        """Constructs a payload object from logical parameters."""
+        instance = cls()
+        instance.operation_enum = operation
+        if pin is not None:
+            instance.pin_str = pin
+        if data is not None:
+            instance.data = data
+
+        return instance
+
+    @classmethod
+    def from_bytes(cls, raw: bytes) -> Self:
+        """Parses raw bytes into a payload object."""
+        return cls(
+            operation = raw[cls.LAYOUTS.operation],
+            pin = raw[cls.LAYOUTS.pin],
+            data = raw[cls.LAYOUTS.data],
+        )
+
+
+    ### Properties
+    ## Helpers
+    @property
+    def pin_str(self) -> str | None:
+        if self.pin == Panel.DEFAULT_MASTER_PIN:
             return None
         return self._decode_pin()
 
@@ -546,6 +625,13 @@ class CommandRequestPayload(BasePayload):
         encoded += [self.PIN_PADDING] * (self.LAYOUTS.pin_size - len(pin))
         self.pin = bytes(encoded)
 
+    ## Serialization
+    @property
+    def raw_bytes(self) -> bytes:
+        return b"".join((self.operation, self.pin, self.data))
+
+
+    ### Methods
     def _decode_pin(self) -> str:
         digits = []
         for byte in self.pin:
@@ -557,14 +643,6 @@ class CommandRequestPayload(BasePayload):
         if not digits:
             raise ValueError(f"No valid digits found in PIN: {self.pin.hex(' ')}.")
         return "".join(digits)
-
-    # ------------------------------------------------------------------
-    # Serialization
-    # ------------------------------------------------------------------
-
-    @property
-    def raw_bytes(self) -> bytes:
-        return b"".join((self.operation, self.pin, self.data))
 
 
 # ---------------------------------------------------------------------------
@@ -582,12 +660,30 @@ class CommandResponsePayload(BasePayload):
           For now the raw bytes are stored as-is and returned to the caller.
     """
 
+    ### Constants
+    @dataclass(frozen = True)
+    class _Layout:
+        header_size: int
+
+        @property
+        def header(self) -> slice:
+            return next_slice(0, self.header_size)
+
+        @property
+        def data(self) -> slice:
+            return next_slice(self.header, None)
+
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        header_size = 4,
+    )
+
+
+    ### Attributes
+    header: bytes = bytes(LAYOUTS.header_size)
     data: bytes = b""
 
-    @classmethod
-    def build(cls, data: bytes) -> Self:
-        return cls(data = data)
-
+    ### Main
     @classmethod
     def assemble(cls, data: bytes) -> bytes:
         return cls.build(data).to_bytes()
@@ -597,10 +693,74 @@ class CommandResponsePayload(BasePayload):
         """Parses a raw response and returns the payload data."""
         return cls.from_bytes(raw).data
 
+
+    ### Constructors
+    @classmethod
+    def build(cls, data: bytes) -> Self:
+        return cls(data = data)
+
     @classmethod
     def from_bytes(cls, raw: bytes) -> Self:
-        return cls(data = raw)
+        return cls(
+            header = raw[cls.LAYOUTS.header],
+            data = raw[cls.LAYOUTS.data],
+        )
 
+
+    ### Properties
+    ## Serialization
     @property
     def raw_bytes(self) -> bytes:
         return self.data
+
+
+@dataclass(slots = True)
+class CommandWithPinResponsePayload(CommandResponsePayload):
+    """
+    Plaintext payload for a command with pin response.
+
+    Note: command payloads carry no checksum — this is by Inim wire design.
+
+    TODO: The response envelope is not yet decoded.
+          For now the raw bytes are stored as-is and returned to the caller.
+    """
+
+    ### Constants
+    @dataclass(frozen = True)
+    class _Layout:
+        header_size: int
+        header_with_pin_size: int
+
+        @property
+        def header(self) -> slice:
+            return next_slice(0, self.header_size)
+
+        @property
+        def header_with_pin(self) -> slice:
+            return next_slice(self.header, self.header_with_pin_size)
+
+        @property
+        def data(self) -> slice:
+            return next_slice(self.header_with_pin, None)
+
+    LAYOUTS: ClassVar[_Layout] = _Layout(
+        header_size = CommandResponsePayload.LAYOUTS.header_size,
+        header_with_pin_size = 14
+    )
+
+    ### Attributes
+    header_with_pin: bytes = bytes(LAYOUTS.header_with_pin_size)
+
+
+    ### Constructors
+    @classmethod
+    def build(cls, data: bytes) -> Self:
+        return cls(data = data)
+
+    @classmethod
+    def from_bytes(cls, raw: bytes) -> Self:
+        return cls(
+            header = raw[cls.LAYOUTS.header],
+            header_with_pin = raw[cls.LAYOUTS.header_with_pin],
+            data = raw[cls.LAYOUTS.data],
+        )

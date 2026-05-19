@@ -24,12 +24,11 @@ async def get_panel_info(
         protocol: Protocol,
 ) -> tuple[str, str, str]:
     RESPONSE_PAYLOAD_LENGTH: Final[int] = 38
-    SERIAL_NUMBER: Final[slice] = slice(4, 20)
-    DESCRIPTION: Final[slice] = slice(20, 36)
+    SERIAL_NUMBER: Final[slice] = slice(0, 16)
+    DESCRIPTION: Final[slice] = slice(16, 32)
 
     panel_info = await protocol.execute_command(
         operation = CommandOperation.GET_PANEL_INFO,
-        pin = None,
         response_payload_length = RESPONSE_PAYLOAD_LENGTH,
     )
 

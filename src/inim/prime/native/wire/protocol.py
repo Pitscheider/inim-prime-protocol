@@ -6,7 +6,8 @@ from typing import Final, Self
 from inim.prime.native.const import CommandOperation, Panel, FrameOperation
 from .cipher import Cipher
 from .frame import OuterFrame, InnerFrame, Frame
-from .payload import ReadRequestPayload, ReadResponsePayload, CommandRequestPayload, ChecksummedPayload
+from .payload import ReadRequestPayload, ReadResponsePayload, CommandWithPinRequestPayload, ChecksummedPayload, \
+    CommandRequestPayload, CommandResponsePayload, CommandWithPinResponsePayload
 from .transport import Transport
 
 
@@ -156,13 +157,11 @@ class Protocol:
             self,
             operation: CommandOperation,
             data: bytes | None = None,
-            pin: str | None | Panel.DefaultMasterPin = Panel.DEFAULT_MASTER_PIN,
             response_payload_length: int | None = None,
     ) -> bytes:
         payload = CommandRequestPayload.assemble(
             operation = operation,
             data = data,
-            pin = pin,
         )
 
         response_payload = await self.exchange_payload(
@@ -171,7 +170,28 @@ class Protocol:
             response_payload_length = response_payload_length,
         )
 
-        return response_payload
+        return CommandResponsePayload.disassemble(response_payload)
+
+    async def execute_command_with_pin(
+            self,
+            operation: CommandOperation,
+            data: bytes | None = None,
+            pin: str | None = None,
+            response_payload_length: int | None = None,
+    ) -> bytes:
+        payload = CommandWithPinRequestPayload.assemble(
+            operation = operation,
+            pin = pin,
+            data = data,
+        )
+
+        response_payload = await self.exchange_payload(
+            payload = payload,
+            operation = FrameOperation.COMMAND,
+            response_payload_length = response_payload_length,
+        )
+
+        return CommandWithPinResponsePayload.disassemble(response_payload)
 
     async def read_memory(
             self,
@@ -231,7 +251,7 @@ class Protocol:
         response_payload_bytes = await self.exchange_payload(
             payload = payload,
             operation = FrameOperation.READ,
-            response_payload_length = chunk_length + ChecksummedPayload.CHECKSUM_SIZE,
+            response_payload_length = chunk_length + ChecksummedPayload.LAYOUTS.checksum_size,
         )
 
         # Validate the response payload, strip checksum, and returns read bytes

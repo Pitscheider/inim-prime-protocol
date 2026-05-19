@@ -10,10 +10,16 @@ class Encoding:
     UINT32_LE: Final[str] = "<I"
     UINT64_LE: Final[str] = "<Q"
 
+    UINT8_SIZE: Final[int] = 8
+    UINT16_LE_SIZE: Final[int] = 16
+    UINT32_LE_SIZE: Final[int] = 32
+    UINT64_LE_SIZE: Final[int] = 64
+
 
 class CommandOperation(Enum):
     SET_PARTITION_MODES = 3
     GET_PARTITION_STATUSES = 6
+    GET_TERMINAL_STATUSES = 7
     RESET_PARTITIONS = 16
     GET_PANEL_INFO = 23
 
@@ -22,17 +28,7 @@ class Panel:
     DEFAULT_PORT: Final[int] = 6004
     DEFAULT_PASSWORD: Final[str] = "pass"
 
-    class DefaultMasterPin:
-        """Sentinel type for the hardcoded master PIN."""
-        BYTES: bytes = bytes([0x74, 0x00, 0x00, 0x00, 0x00, 0x00])
-
-        def __bytes__(self) -> bytes:
-            return self.BYTES
-
-        def __repr__(self) -> str:
-            return "DEFAULT_MASTER_PIN"
-
-    DEFAULT_MASTER_PIN: Final[DefaultMasterPin] = DefaultMasterPin()
+    DEFAULT_MASTER_PIN: bytes = b"\x74\x00\x00\x00\x00\x00"
 
 
 class AddressTable:

@@ -1,11 +1,44 @@
 from __future__ import annotations
+from functools import singledispatch
 
 from inim.prime.native.const import CRC16_TABLE
 
+### Next Slice
+@singledispatch
+def next_slice(s: int | slice, size: int | None) -> slice:
+    ...
+
+@next_slice.register
+def _(s: int, size: int | None) -> slice:
+    start = s
+    stop = start + size if size is not None else None
+    return slice(start, stop)
+
+@next_slice.register
+def _(s: slice, size: int | None) -> slice:
+    if s.stop is None:
+        raise ValueError("s.stop must be an integer")
+    start = s.stop
+    stop = start + size if size is not None else None
+    return slice(start, stop)
+
+### Previous Slice
+def previous_slice(s: slice | None, size: int | None) -> slice:
+    stop: int | None
+    if s is None:
+        stop = None
+    else:
+        if s.start is None:
+            raise ValueError("s.start must be an integer")
+        stop = s.start
+    if size is None:
+        start = 0
+    else:
+        start = stop - size if stop is not None else -size
+    return slice(start, stop)
 
 def slice_size(s: slice) -> int:
     return s.stop - s.start
-
 
 def round_up_to_block(
         n: int,

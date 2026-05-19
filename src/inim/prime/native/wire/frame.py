@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from typing import Self, ClassVar
 
 from inim.prime.native.const import FrameOperation
-from inim.prime.native.utils import slice_size
-from inim.prime.native.utils import round_up_to_block, crc16_arc
+from inim.prime.native.utils import round_up_to_block, crc16_arc, next_slice
 from .cipher import Cipher
 from .header import Header, OuterHeader, InnerHeader
 
@@ -102,16 +101,18 @@ class InnerFrame(Frame):
     ### Constants
     @dataclass(frozen = True)
     class _Layout:
-        inner_header: slice
-        encrypted_payload: slice
+        inner_header_size: int
 
         @property
-        def inner_header_size(self) -> int:
-            return slice_size(self.inner_header)
+        def inner_header(self) -> slice:
+            return next_slice(0, self.inner_header_size)
+
+        @property
+        def encrypted_payload(self) -> slice:
+            return next_slice(self.inner_header, None)
 
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        inner_header = slice(0, 10),
-        encrypted_payload = slice(10, None),
+        inner_header_size = InnerHeader.SIZE,
     )
 
     CRC_COVERAGE: ClassVar[slice] = slice(InnerHeader.LAYOUTS.operation.start, None)
@@ -331,16 +332,17 @@ class OuterFrame(Frame):
     ### Constants
     @dataclass(frozen = True)
     class _Layout:
-        outer_header: slice
-        inner_frame: slice
+        outer_header_size: int
 
         @property
-        def outer_header_size(self) -> int:
-            return slice_size(self.outer_header)
+        def outer_header(self) -> slice:
+            return next_slice(0, self.outer_header_size)
 
+        @property
+        def inner_frame(self) -> slice:
+            return next_slice(self.outer_header, None)
     LAYOUTS: ClassVar[_Layout] = _Layout(
-        outer_header = slice(0, 12),
-        inner_frame = slice(12, None),
+        outer_header_size = OuterHeader.SIZE,
     )
 
     MIN_SIZE: ClassVar[int] = OuterHeader.SIZE + InnerFrame.MIN_SIZE
