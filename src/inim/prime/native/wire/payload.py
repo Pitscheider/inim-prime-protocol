@@ -3,9 +3,7 @@ from __future__ import annotations
 import struct
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from typing import ClassVar, Self
-
-from scapy.layers.kerberos import Checksum
+from typing import ClassVar, Self, Final
 
 from inim.prime.native.const import Encoding, CommandOperation, Panel
 from inim.prime.native.utils import next_slice, previous_slice
@@ -108,13 +106,8 @@ class ChecksummedPayload(BasePayload, ABC):
     is something other than the raw validated bytes.
     """
 
-    @dataclass(frozen = True)
-    class _Layout:
-        checksum_size: int
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        checksum_size = 1,
-    )
+    class Layout:
+        checksum_size: Final[int] = 1
 
     CHECKSUM_COVERAGE: ClassVar[slice]  # subclasses define the exact coverage
 
@@ -196,57 +189,39 @@ class ReadRequestPayload(ChecksummedPayload):
               is effectively redundant at the native level.
     """
 
-    @dataclass(frozen = True)
-    class _Layout:
-        address_size: int
-        transfer_length_size: int
-        chunk_length_size: int
-        padding_size: int
-        marker_size: int
-        checksum_size: int
+    class Layout:
+        address_size: Final[int] = Encoding.UINT64_LE_SIZE
+        transfer_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+        chunk_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+        padding_size: Final[int] = 2
+        marker_size: Final[int] = 1
+        checksum_size: Final[int] = ChecksummedPayload.Layout.checksum_size
 
-        @property
-        def address(self) -> slice:
-            return next_slice(0, self.address_size)
+        size: Final[int] = (
+                address_size
+                + transfer_length_size
+                + chunk_length_size
+                + padding_size
+                + marker_size
+                + checksum_size
+        )
 
-        @property
-        def transfer_length(self) -> slice:
-            return next_slice(self.address, self.transfer_length_size)
-
-        @property
-        def chunk_length(self) -> slice:
-            return next_slice(self.transfer_length, self.chunk_length_size)
-
-        @property
-        def padding(self) -> slice:
-            return next_slice(self.chunk_length, self.padding_size)
-
-        @property
-        def marker(self) -> slice:
-            return next_slice(self.padding, self.marker_size)
-
-        @property
-        def checksum(self) -> slice:
-            return next_slice(self.marker, self.checksum_size)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        address_size = Encoding.UINT64_LE_SIZE,
-        transfer_length_size = Encoding.UINT32_LE_SIZE,
-        chunk_length_size = Encoding.UINT32_LE_SIZE,
-        padding_size = 2,
-        marker_size = 1,
-        checksum_size = ChecksummedPayload.LAYOUTS.checksum_size,
-    )
+        address: Final[slice] = next_slice(0, address_size)
+        transfer_length: Final[slice] = next_slice(address, transfer_length_size)
+        chunk_length: Final[slice] = next_slice(transfer_length, chunk_length_size)
+        padding: Final[slice] = next_slice(chunk_length, padding_size)
+        marker: Final[slice] = next_slice(padding, marker_size)
+        checksum: Final[slice] = next_slice(marker, checksum_size)
 
     MARKER: ClassVar[bytes] = b"\x11"
-    CHECKSUM_COVERAGE: ClassVar[slice] = slice(LAYOUTS.address.start, LAYOUTS.marker.stop)
+    CHECKSUM_COVERAGE: ClassVar[slice] = slice(Layout.address.start, Layout.marker.stop)
 
-    address: bytes = bytes(LAYOUTS.address_size)
-    transfer_length: bytes = bytes(LAYOUTS.transfer_length_size)
-    chunk_length: bytes = bytes(LAYOUTS.chunk_length_size)
-    padding: bytes = bytes(LAYOUTS.padding_size)
+    address: bytes = bytes(Layout.address_size)
+    transfer_length: bytes = bytes(Layout.transfer_length_size)
+    chunk_length: bytes = bytes(Layout.chunk_length_size)
+    padding: bytes = bytes(Layout.padding_size)
     marker: bytes = MARKER
-    checksum: bytes = bytes(LAYOUTS.checksum_size)
+    checksum: bytes = bytes(Layout.checksum_size)
 
     # ------------------------------------------------------------------
     # High-level entry points
@@ -293,12 +268,12 @@ class ReadRequestPayload(ChecksummedPayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object. Does not validate the checksum."""
         return cls(
-            address = raw[cls.LAYOUTS.address],
-            transfer_length = raw[cls.LAYOUTS.transfer_length],
-            chunk_length = raw[cls.LAYOUTS.chunk_length],
-            padding = raw[cls.LAYOUTS.padding],
-            marker = raw[cls.LAYOUTS.marker],
-            checksum = raw[cls.LAYOUTS.checksum],
+            address = raw[cls.Layout.address],
+            transfer_length = raw[cls.Layout.transfer_length],
+            chunk_length = raw[cls.Layout.chunk_length],
+            padding = raw[cls.Layout.padding],
+            marker = raw[cls.Layout.marker],
+            checksum = raw[cls.Layout.checksum],
         )
 
     # ------------------------------------------------------------------
@@ -355,21 +330,12 @@ class ReadResponsePayload(ChecksummedPayload):
       Checksum  [n : n+1]   uint8       covers [0:n]
     """
 
-    @dataclass(frozen = True)
-    class _Layout:
-        checksum_size: int
+    ### Constants
+    class Layout:
+        checksum_size: Final[int] = ChecksummedPayload.Layout.checksum_size
 
-        @property
-        def checksum(self) -> slice:
-            return previous_slice(None, self.checksum_size)
-
-        @property
-        def data(self) -> slice:
-            return previous_slice(self.checksum, None)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        checksum_size = ChecksummedPayload.LAYOUTS.checksum_size,
-    )
+        checksum: Final[slice] = previous_slice(None, checksum_size)
+        data: Final[slice] = previous_slice(checksum, None)
 
     CHECKSUM_COVERAGE: ClassVar[slice] = slice(0, -1)  # everything except the last byte
 
@@ -408,8 +374,8 @@ class ReadResponsePayload(ChecksummedPayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object. Does not validate the checksum."""
         return cls(
-            data = raw[cls.LAYOUTS.data],
-            checksum = raw[cls.LAYOUTS.checksum],
+            data = raw[cls.Layout.data],
+            checksum = raw[cls.Layout.checksum],
         )
 
     # ------------------------------------------------------------------
@@ -429,25 +395,15 @@ class ReadResponsePayload(ChecksummedPayload):
 class CommandRequestPayload(BasePayload):
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        operation_size: int
+    class Layout:
+        operation_size: Final[int] = Encoding.UINT32_LE_SIZE
 
-        @property
-        def operation(self) -> slice:
-            return next_slice(0, self.operation_size)
-
-        @property
-        def data(self) -> slice:
-            return next_slice(self.operation, None)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        operation_size = Encoding.UINT32_LE_SIZE,
-    )
+        operation: Final[slice] = next_slice(0, operation_size)
+        data: Final[slice] = next_slice(operation, None)
 
 
     ### Attributes
-    operation: bytes = bytes(LAYOUTS.operation_size)
+    operation: bytes = bytes(Layout.operation_size)
     data: bytes = b""
 
 
@@ -489,8 +445,8 @@ class CommandRequestPayload(BasePayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object."""
         return cls(
-            operation = raw[cls.LAYOUTS.operation],
-            data = raw[cls.LAYOUTS.data],
+            operation = raw[cls.Layout.operation],
+            data = raw[cls.Layout.data],
         )
 
 
@@ -526,28 +482,13 @@ class CommandRequestPayload(BasePayload):
 class CommandWithPinRequestPayload(CommandRequestPayload):
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        operation_size: int
-        pin_size: int
+    class Layout:
+        operation_size: Final[int] = CommandRequestPayload.Layout.operation_size
+        pin_size: Final[int] = 6
 
-        @property
-        def operation(self) -> slice:
-            return next_slice(0, self.operation_size)
-
-        @property
-        def pin(self) -> slice:
-            return next_slice(self.operation, self.pin_size)
-
-        @property
-        def data(self) -> slice:
-            return next_slice(self.pin, None)
-
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        operation_size = CommandRequestPayload.LAYOUTS.operation_size,
-        pin_size = 6,
-    )
+        operation: Final[slice] = next_slice(0, operation_size)
+        pin: Final[slice] = next_slice(operation, pin_size)
+        data: Final[slice] = next_slice(pin, None)
 
     PIN_PADDING: ClassVar[int] = 0xFF
 
@@ -601,9 +542,9 @@ class CommandWithPinRequestPayload(CommandRequestPayload):
     def from_bytes(cls, raw: bytes) -> Self:
         """Parses raw bytes into a payload object."""
         return cls(
-            operation = raw[cls.LAYOUTS.operation],
-            pin = raw[cls.LAYOUTS.pin],
-            data = raw[cls.LAYOUTS.data],
+            operation = raw[cls.Layout.operation],
+            pin = raw[cls.Layout.pin],
+            data = raw[cls.Layout.data],
         )
 
 
@@ -619,10 +560,10 @@ class CommandWithPinRequestPayload(CommandRequestPayload):
     def pin_str(self, pin: str) -> None:
         if not pin.isdigit():
             raise ValueError(f"PIN must contain digits only, got: {pin!r}")
-        if not (1 <= len(pin) <= self.LAYOUTS.pin_size):
-            raise ValueError(f"PIN must be 1–{self.LAYOUTS.pin_size} digits, got {len(pin)}.")
+        if not (1 <= len(pin) <= self.Layout.pin_size):
+            raise ValueError(f"PIN must be 1–{self.Layout.pin_size} digits, got {len(pin)}.")
         encoded = [int(d) for d in pin]
-        encoded += [self.PIN_PADDING] * (self.LAYOUTS.pin_size - len(pin))
+        encoded += [self.PIN_PADDING] * (self.Layout.pin_size - len(pin))
         self.pin = bytes(encoded)
 
     ## Serialization
@@ -661,26 +602,15 @@ class CommandResponsePayload(BasePayload):
     """
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        header_size: int
+    class Layout:
+        header_size: Final[int] = 4
 
-        @property
-        def header(self) -> slice:
-            return next_slice(0, self.header_size)
-
-        @property
-        def data(self) -> slice:
-            return next_slice(self.header, None)
-
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        header_size = 4,
-    )
+        header: Final[slice] = next_slice(0, header_size)
+        data: Final[slice] = next_slice(header, None)
 
 
     ### Attributes
-    header: bytes = bytes(LAYOUTS.header_size)
+    header: bytes = bytes(Layout.header_size)
     data: bytes = b""
 
     ### Main
@@ -702,8 +632,8 @@ class CommandResponsePayload(BasePayload):
     @classmethod
     def from_bytes(cls, raw: bytes) -> Self:
         return cls(
-            header = raw[cls.LAYOUTS.header],
-            data = raw[cls.LAYOUTS.data],
+            header = raw[cls.Layout.header],
+            data = raw[cls.Layout.data],
         )
 
 
@@ -726,30 +656,17 @@ class CommandWithPinResponsePayload(CommandResponsePayload):
     """
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        header_size: int
-        header_with_pin_size: int
+    class Layout:
+        header_size: Final[int] = CommandResponsePayload.Layout.header_size
+        header_with_pin_size: Final[int] = 14
 
-        @property
-        def header(self) -> slice:
-            return next_slice(0, self.header_size)
+        header: Final[slice] = next_slice(0, header_size)
+        header_with_pin: Final[slice] = next_slice(header, header_with_pin_size)
+        data: Final[slice] = next_slice(header_with_pin, None)
 
-        @property
-        def header_with_pin(self) -> slice:
-            return next_slice(self.header, self.header_with_pin_size)
-
-        @property
-        def data(self) -> slice:
-            return next_slice(self.header_with_pin, None)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        header_size = CommandResponsePayload.LAYOUTS.header_size,
-        header_with_pin_size = 14
-    )
 
     ### Attributes
-    header_with_pin: bytes = bytes(LAYOUTS.header_with_pin_size)
+    header_with_pin: bytes = bytes(Layout.header_with_pin_size)
 
 
     ### Constructors
@@ -760,7 +677,7 @@ class CommandWithPinResponsePayload(CommandResponsePayload):
     @classmethod
     def from_bytes(cls, raw: bytes) -> Self:
         return cls(
-            header = raw[cls.LAYOUTS.header],
-            header_with_pin = raw[cls.LAYOUTS.header_with_pin],
-            data = raw[cls.LAYOUTS.data],
+            header = raw[cls.Layout.header],
+            header_with_pin = raw[cls.Layout.header_with_pin],
+            data = raw[cls.Layout.data],
         )

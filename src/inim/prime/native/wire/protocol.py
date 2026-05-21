@@ -251,7 +251,7 @@ class Protocol:
         response_payload_bytes = await self.exchange_payload(
             payload = payload,
             operation = FrameOperation.READ,
-            response_payload_length = chunk_length + ChecksummedPayload.LAYOUTS.checksum_size,
+            response_payload_length = chunk_length + ChecksummedPayload.Layout.checksum_size,
         )
 
         # Validate the response payload, strip checksum, and returns read bytes

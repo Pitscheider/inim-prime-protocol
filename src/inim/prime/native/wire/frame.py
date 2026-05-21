@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from typing import Self, ClassVar
+from typing import Self, ClassVar, Final
 
 from inim.prime.native.const import FrameOperation
 from inim.prime.native.utils import round_up_to_block, crc16_arc, next_slice
@@ -99,24 +99,14 @@ class Frame(ABC):
 class InnerFrame(Frame):
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        inner_header_size: int
+    class Layout:
+        inner_header_size: Final[int] = InnerHeader.Layout.size
 
-        @property
-        def inner_header(self) -> slice:
-            return next_slice(0, self.inner_header_size)
+        inner_header: Final[slice] = next_slice(0, inner_header_size)
+        encrypted_payload: Final[slice] = next_slice(inner_header, None)
 
-        @property
-        def encrypted_payload(self) -> slice:
-            return next_slice(self.inner_header, None)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        inner_header_size = InnerHeader.SIZE,
-    )
-
-    CRC_COVERAGE: ClassVar[slice] = slice(InnerHeader.LAYOUTS.operation.start, None)
-    MIN_SIZE: ClassVar[int] = InnerHeader.SIZE + Cipher.AES_BLOCK_SIZE
+    CRC_COVERAGE: ClassVar[slice] = slice(InnerHeader.Layout.operation.start, None)
+    MIN_SIZE: ClassVar[int] = InnerHeader.Layout.size + Cipher.AES_BLOCK_SIZE
 
 
     ### Attributes
@@ -174,7 +164,7 @@ class InnerFrame(Frame):
         :param operation:                   FrameOperation type.
         :return: The constructed frame object.
         """
-        inner_frame_length = InnerHeader.SIZE + len(encrypted_payload)
+        inner_frame_length = InnerHeader.Layout.size + len(encrypted_payload)
 
         inner_frame = cls(
             header = InnerHeader.build(
@@ -194,8 +184,8 @@ class InnerFrame(Frame):
         :param inner_frame_bytes:   Raw bytes of the inner frame to parse.
         :return:                    The constructed inner frame object.
         """
-        inner_header = inner_frame_bytes[cls.LAYOUTS.inner_header]
-        encrypted_payload = inner_frame_bytes[cls.LAYOUTS.encrypted_payload]
+        inner_header = inner_frame_bytes[cls.Layout.inner_header]
+        encrypted_payload = inner_frame_bytes[cls.Layout.encrypted_payload]
 
         return cls(
             header = InnerHeader.from_bytes(inner_header),
@@ -213,7 +203,7 @@ class InnerFrame(Frame):
     @property
     def is_inner_frame_length_valid(self) -> bool:
         """True if inner_frame_length_inner matches the actual inner frame size."""
-        actual = InnerHeader.SIZE + len(self.encrypted_payload)
+        actual = InnerHeader.Layout.size + len(self.encrypted_payload)
         return self.header.inner_frame_length_int == actual
 
     @property
@@ -236,7 +226,7 @@ class InnerFrame(Frame):
         """
         :return: Inner frame length.
         """
-        return InnerHeader.SIZE + self.encrypted_payload_length
+        return InnerHeader.Layout.size + self.encrypted_payload_length
 
     @property
     def operation(self) -> bytes:
@@ -288,7 +278,7 @@ class InnerFrame(Frame):
         if not self.is_size_valid:
             raise ValueError(f"Encrypted payload too short: need ≥ {Cipher.AES_BLOCK_SIZE} bytes.")
         if not self.is_inner_frame_length_valid:
-            actual = InnerHeader.SIZE + len(self.encrypted_payload)
+            actual = InnerHeader.Layout.size + len(self.encrypted_payload)
             raise ValueError(
                 f"Inner frame length mismatch: "
                 f"declared {self.header.inner_frame_length_int}, actual {actual}."
@@ -305,7 +295,7 @@ class InnerFrame(Frame):
         :return: Calculated CRC-16/ARC from current field values.
         """
         return crc16_arc(
-            self.header.raw_bytes[InnerHeader.CRC_COVERAGE] + self.encrypted_payload
+            self.raw_bytes[self.CRC_COVERAGE]
         )
 
     def update_crc(self) -> Self:
@@ -330,22 +320,13 @@ class InnerFrame(Frame):
 class OuterFrame(Frame):
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        outer_header_size: int
+    class Layout:
+        outer_header_size: Final[int] = OuterHeader.Layout.size
 
-        @property
-        def outer_header(self) -> slice:
-            return next_slice(0, self.outer_header_size)
+        outer_header: Final[slice] = next_slice(0, outer_header_size)
+        inner_frame: Final[slice] = next_slice(outer_header, None)
 
-        @property
-        def inner_frame(self) -> slice:
-            return next_slice(self.outer_header, None)
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        outer_header_size = OuterHeader.SIZE,
-    )
-
-    MIN_SIZE: ClassVar[int] = OuterHeader.SIZE + InnerFrame.MIN_SIZE
+    MIN_SIZE: ClassVar[int] = OuterHeader.Layout.size + InnerFrame.MIN_SIZE
 
 
     ### Attributes
@@ -406,7 +387,7 @@ class OuterFrame(Frame):
         inner_frame_length = inner_frame.header.inner_frame_length_int
 
         if response_payload_length is not None:
-            response_inner_frame_length = round_up_to_block(response_payload_length, Cipher.AES_BLOCK_SIZE) + InnerHeader.SIZE
+            response_inner_frame_length = round_up_to_block(response_payload_length, Cipher.AES_BLOCK_SIZE) + InnerHeader.Layout.size
         else:
             response_inner_frame_length = OuterHeader.RESPONSE_INNER_FRAME_LENGTH_DEFAULT
 
@@ -428,8 +409,8 @@ class OuterFrame(Frame):
         :param outer_frame_bytes:     Raw bytes of the outer frame to parse.
         :return:                The constructed frame object.
         """
-        outer_header = outer_frame_bytes[cls.LAYOUTS.outer_header]
-        inner_frame = outer_frame_bytes[cls.LAYOUTS.inner_frame]
+        outer_header = outer_frame_bytes[cls.Layout.outer_header]
+        inner_frame = outer_frame_bytes[cls.Layout.inner_frame]
 
         return cls(
             header = OuterHeader.from_bytes(outer_header),
@@ -450,7 +431,7 @@ class OuterFrame(Frame):
         """
         :return: Outer frame length.
         """
-        return OuterHeader.SIZE + self.inner_frame.length
+        return OuterHeader.Layout.size + self.inner_frame.length
 
     @property
     def operation(self) -> bytes:

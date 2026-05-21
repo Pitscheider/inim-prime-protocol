@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import ClassVar, Self, Final
 
 from inim.prime.native.const import Encoding, FrameOperation
 from inim.prime.native.utils import next_slice
@@ -11,7 +11,10 @@ from inim.prime.native.utils import next_slice
 
 @dataclass(slots = True)
 class Header(ABC):
-    SIZE: ClassVar[int]
+
+    ### Constants
+    class Layout:
+        size: int
 
     @property
     @abstractmethod
@@ -36,39 +39,26 @@ class Header(ABC):
 class OuterHeader(Header):
 
     ### Constants
-    SIZE: ClassVar[int] = 12
+    class Layout:
+        magic_size: Final[int] = 2
+        padding_size: Final[int] = 2
+        inner_frame_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+        response_inner_frame_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+
+        size: Final[int] = (
+                magic_size
+                + padding_size
+                + inner_frame_length_size
+                + response_inner_frame_length_size
+        )
+
+        magic: Final[slice] = next_slice(0, magic_size)
+        padding: Final[slice] = next_slice(magic, padding_size)
+        inner_frame_length: Final[slice] = next_slice(padding, inner_frame_length_size)
+        response_inner_frame_length: Final[slice] = next_slice(inner_frame_length, response_inner_frame_length_size)
+
     MAGIC: ClassVar[bytes] = b"\x50\x53"
     RESPONSE_INNER_FRAME_LENGTH_DEFAULT: ClassVar[int] = 0
-
-    @dataclass(frozen = True)
-    class _Layout:
-        magic_size: int
-        padding_size: int
-        inner_frame_length_size: int
-        response_inner_frame_length_size: int
-
-        @property
-        def magic(self) -> slice:
-            return next_slice(0, self.magic_size)
-
-        @property
-        def padding(self) -> slice:
-            return next_slice(self.magic, self.padding_size)
-
-        @property
-        def inner_frame_length(self) -> slice:
-            return next_slice(self.padding, self.inner_frame_length_size)
-
-        @property
-        def response_inner_frame_length(self) -> slice:
-            return next_slice(self.inner_frame_length, self.response_inner_frame_length_size)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        magic_size = 2,
-        padding_size = 2,
-        inner_frame_length_size = Encoding.UINT32_LE_SIZE,
-        response_inner_frame_length_size = Encoding.UINT32_LE_SIZE,
-    )
 
 
     ### Attributes
@@ -77,9 +67,9 @@ class OuterHeader(Header):
     # Inner frame length           [4:8]     0-initialised   uint32 LE
     # Response inner frame length  [8:12]    0-initialised   uint32 LE
     magic: bytes = MAGIC
-    padding: bytes = bytes(LAYOUTS.padding_size)
-    inner_frame_length: bytes = bytes(LAYOUTS.inner_frame_length_size)
-    response_inner_frame_length: bytes = bytes(LAYOUTS.response_inner_frame_length_size)
+    padding: bytes = bytes(Layout.padding_size)
+    inner_frame_length: bytes = bytes(Layout.inner_frame_length_size)
+    response_inner_frame_length: bytes = bytes(Layout.response_inner_frame_length_size)
 
 
     ### Constructors
@@ -100,10 +90,10 @@ class OuterHeader(Header):
             outer_header: bytes
     ) -> Self:
         return cls(
-            magic = outer_header[cls.LAYOUTS.magic],
-            padding = outer_header[cls.LAYOUTS.padding],
-            inner_frame_length = outer_header[cls.LAYOUTS.inner_frame_length],
-            response_inner_frame_length = outer_header[cls.LAYOUTS.response_inner_frame_length],
+            magic = outer_header[cls.Layout.magic],
+            padding = outer_header[cls.Layout.padding],
+            inner_frame_length = outer_header[cls.Layout.inner_frame_length],
+            response_inner_frame_length = outer_header[cls.Layout.response_inner_frame_length],
         )
 
 
@@ -149,7 +139,7 @@ class OuterHeader(Header):
     @property
     def is_padding_valid(self) -> bool:
         """True if padding bytes are 0x0000."""
-        return self.padding == bytes(OuterHeader.LAYOUTS.padding_size)
+        return self.padding == bytes(OuterHeader.Layout.padding_size)
 
     @property
     def is_valid(self) -> bool:
@@ -189,7 +179,7 @@ class OuterHeader(Header):
             )
         if not self.is_padding_valid:
             raise ValueError(
-                f"Outer header padding mismatch: expected {bytes(OuterHeader.LAYOUTS.padding_size).hex()}, "
+                f"Outer header padding mismatch: expected {bytes(OuterHeader.Layout.padding_size).hex()}, "
                 f"got {self.padding.hex()}."
             )
 
@@ -198,39 +188,25 @@ class OuterHeader(Header):
 class InnerHeader(Header):
 
     ### Constants
-    @dataclass(frozen = True)
-    class _Layout:
-        magic_size: int
-        crc_size: int
-        operation_size: int
-        inner_frame_length_size: int
+    class Layout:
+        magic_size: Final[int] = 2
+        crc_size: Final[int] = Encoding.UINT16_LE_SIZE
+        operation_size: Final[int] = Encoding.UINT16_LE_SIZE
+        inner_frame_length_size: Final[int] = Encoding.UINT32_LE_SIZE
 
-        @property
-        def magic(self) -> slice:
-            return next_slice(0, self.magic_size)
+        size: Final[int] = (
+                magic_size
+                + crc_size
+                + operation_size
+                + inner_frame_length_size
+        )
 
-        @property
-        def crc(self) -> slice:
-            return next_slice(self.magic, self.crc_size)
+        magic: Final[slice] = next_slice(0, magic_size)
+        crc: Final[slice] = next_slice(magic, crc_size)
+        operation: Final[slice] = next_slice(crc, operation_size)
+        inner_frame_length: Final[slice] = next_slice(operation, inner_frame_length_size)
 
-        @property
-        def operation(self) -> slice:
-            return next_slice(self.crc, self.operation_size)
-
-        @property
-        def inner_frame_length(self) -> slice:
-            return next_slice(self.operation, self.inner_frame_length_size)
-
-    LAYOUTS: ClassVar[_Layout] = _Layout(
-        magic_size = 2,
-        crc_size = Encoding.UINT16_LE_SIZE,
-        operation_size = Encoding.UINT16_LE_SIZE,
-        inner_frame_length_size = Encoding.UINT32_LE_SIZE,
-    )
-
-    SIZE: ClassVar[int] = 10
     MAGIC: ClassVar[bytes] = b"\x50\x50"
-    CRC_COVERAGE: ClassVar[slice] = slice(LAYOUTS.operation.start, SIZE)
 
 
     ### Attributes
@@ -239,9 +215,9 @@ class InnerHeader(Header):
     # FrameOperation             [4:6]     0-initialised   raw
     # Inner frame length    [6:10]    0-initialised   uint32 LE
     magic: bytes = MAGIC
-    crc: bytes = bytes(LAYOUTS.crc_size)
-    operation: bytes = bytes(LAYOUTS.operation_size)
-    inner_frame_length: bytes = bytes(LAYOUTS.inner_frame_length_size)
+    crc: bytes = bytes(Layout.crc_size)
+    operation: bytes = bytes(Layout.operation_size)
+    inner_frame_length: bytes = bytes(Layout.inner_frame_length_size)
 
 
     ### Constructors
@@ -263,10 +239,10 @@ class InnerHeader(Header):
             inner_header: bytes
     ) -> Self:
         return cls(
-            magic = inner_header[cls.LAYOUTS.magic],
-            crc = inner_header[cls.LAYOUTS.crc],
-            operation = inner_header[cls.LAYOUTS.operation],
-            inner_frame_length = inner_header[cls.LAYOUTS.inner_frame_length],
+            magic = inner_header[cls.Layout.magic],
+            crc = inner_header[cls.Layout.crc],
+            operation = inner_header[cls.Layout.operation],
+            inner_frame_length = inner_header[cls.Layout.inner_frame_length],
         )
 
 
@@ -274,7 +250,7 @@ class InnerHeader(Header):
     ## Header
     @property
     def inner_body_length(self) -> int:
-        return self.inner_frame_length_int - self.SIZE
+        return self.inner_frame_length_int - self.Layout.size
 
     ## Helper
     @property

@@ -4,6 +4,8 @@ from inim.prime.native.const import AddressTable, Memory
 from inim.prime.native.wire import Protocol
 
 from . import resolve_address
+from ..utils import next_slice
+
 
 class TerminalType(StrEnum):
     PANEL = auto()
@@ -40,13 +42,14 @@ def _build_terminal_label_sizes() -> dict[TerminalType, int]:
 
 def _build_terminal_label_layouts(offset: int = 0) -> dict[TerminalType, slice]:
     layout: dict[TerminalType, slice] = {}
-    cursor = offset
 
+    previous: TerminalType | None = None
     for t in TerminalType:
-        size = TERMINAL_LABEL_SIZES[t]
-
-        layout[t] = slice(cursor, cursor + size)
-        cursor += size
+        layout[t] = next_slice(
+            layout[previous] if previous is not None else 0,
+            TERMINAL_LABEL_SIZES[t],
+        )
+        previous = t
 
     return layout
 

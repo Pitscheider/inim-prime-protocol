@@ -280,7 +280,7 @@ class Transport:
 
             # Read fixed-size outer header
             header_bytes = await asyncio.wait_for(
-                self._reader.readexactly(header_type.SIZE),
+                self._reader.readexactly(header_type.Layout.size),
                 timeout = self._receive_timeout,
             )
 
