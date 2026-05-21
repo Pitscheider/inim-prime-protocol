@@ -11,9 +11,9 @@ class Encoding:
     UINT64_LE: Final[str] = "<Q"
 
     UINT8_SIZE: Final[int] = 8
-    UINT16_LE_SIZE: Final[int] = 16
-    UINT32_LE_SIZE: Final[int] = 32
-    UINT64_LE_SIZE: Final[int] = 64
+    UINT16_LE_SIZE: Final[int] = 2
+    UINT32_LE_SIZE: Final[int] = 4
+    UINT64_LE_SIZE: Final[int] = 8
 
 
 class CommandOperation(Enum):
