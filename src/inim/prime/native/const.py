@@ -10,7 +10,7 @@ class Encoding:
     UINT32_LE: Final[str] = "<I"
     UINT64_LE: Final[str] = "<Q"
 
-    UINT8_SIZE: Final[int] = 8
+    UINT8_SIZE: Final[int] = 1
     UINT16_LE_SIZE: Final[int] = 2
     UINT32_LE_SIZE: Final[int] = 4
     UINT64_LE_SIZE: Final[int] = 8
