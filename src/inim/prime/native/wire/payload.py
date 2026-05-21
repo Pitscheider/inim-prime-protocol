@@ -9,62 +9,15 @@ from inim.prime.native.const import Encoding, CommandOperation, Panel
 from inim.prime.native.utils import next_slice, previous_slice
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
+### Helpers
 def _checksum(data: bytes) -> int:
     """Simple 8-bit additive checksum (sum of all bytes, truncated to 1 byte)."""
     return sum(data) & 0xFF
 
-
-# ---------------------------------------------------------------------------
-# Abstract base — contract every payload must honour
-# ---------------------------------------------------------------------------
-
+### Payloads Abstract
 class BasePayload(ABC):
-    """
-    Shared contract for all Inim payload types.
 
-    Every concrete payload must be able to:
-      - Serialise itself to bytes          (raw_bytes / to_bytes)
-      - Parse itself from bytes            (from_bytes)
-      - Build from logical parameters      (build / assemble)
-      - Extract meaningful content         (disassemble)
-
-    Checksum handling is NOT part of this contract — that lives in
-    ChecksummedPayload, which only read payloads inherit from.
-    """
-
-    @property
-    @abstractmethod
-    def raw_bytes(self) -> bytes:
-        """All fields in wire order, without recomputing any integrity value."""
-        ...
-
-    def to_bytes(self) -> bytes:
-        """
-        Serialise the payload to bytes, finalising any integrity fields first.
-        Default implementation delegates straight to raw_bytes.
-        Overridden by ChecksummedPayload to update the checksum before returning.
-        """
-        return self.raw_bytes
-
-    @classmethod
-    @abstractmethod
-    def from_bytes(cls, raw: bytes) -> Self:
-        """
-        Parse raw bytes into a payload instance.
-        Must not validate integrity — call validate() separately if needed.
-        """
-        ...
-
-    @classmethod
-    @abstractmethod
-    def build(cls, **kwargs) -> Self:
-        """Construct a payload instance from logical parameters."""
-        ...
-
+    ### Main
     @classmethod
     @abstractmethod
     def assemble(cls, **kwargs) -> bytes:
@@ -85,36 +38,52 @@ class BasePayload(ABC):
         """
         ...
 
+    ### Constructors
+    @classmethod
+    @abstractmethod
+    def build(cls, **kwargs) -> Self:
+        """Construct a payload instance from logical parameters."""
+        ...
 
-# ---------------------------------------------------------------------------
-# Mixin — checksum behaviour, shared by all read payloads
-# ---------------------------------------------------------------------------
+    @classmethod
+    @abstractmethod
+    def from_bytes(cls, raw: bytes) -> Self:
+        """
+        Parse raw bytes into a payload instance.
+        Must not validate integrity — call validate() separately if needed.
+        """
+        ...
+
+    ### Properties
+    ## Serialization
+    @property
+    @abstractmethod
+    def raw_bytes(self) -> bytes:
+        """All fields in wire order, without recomputing any integrity value."""
+        ...
+
+    ### Methods
+    ## Serialization
+    def to_bytes(self) -> bytes:
+        """
+        Serialise the payload to bytes, finalising any integrity fields first.
+        Default implementation delegates straight to raw_bytes.
+        Overridden by ChecksummedPayload to update the checksum before returning.
+        """
+        return self.raw_bytes
+
 
 class ChecksummedPayload(BasePayload, ABC):
-    """
-    Extends BasePayload with an 8-bit additive checksum appended as the last byte.
 
-    Subclasses must:
-      - Store `checksum: bytes` as a dataclass field (1 byte, 0-initialised).
-      - Override `CHECKSUM_COVERAGE` to define the slice that the checksum covers.
-      - Override `raw_bytes` to include `self.checksum` as the last element.
-      - Override `from_bytes` to parse raw bytes into an instance.
-      - Override `assemble` with their own typed parameter list.
-
-    disassemble is provided here as a concrete implementation —
-    subclasses only need to override it if their meaningful content
-    is something other than the raw validated bytes.
-    """
-
+    ### Constants
     class Layout:
         checksum_size: Final[int] = 1
 
     CHECKSUM_COVERAGE: ClassVar[slice]  # subclasses define the exact coverage
 
-    # ------------------------------------------------------------------
-    # Checksum accessors
-    # ------------------------------------------------------------------
 
+    ### Properties
+    ## Attributes
     @property
     @abstractmethod
     def checksum(self) -> bytes:
@@ -127,6 +96,7 @@ class ChecksummedPayload(BasePayload, ABC):
         """Subclasses must store this as a dataclass field."""
         ...
 
+    ## Helpers
     @property
     def checksum_int(self) -> int:
         return struct.unpack(Encoding.UINT8, self.checksum)[0]  # type: ignore[attr-defined]
@@ -135,6 +105,14 @@ class ChecksummedPayload(BasePayload, ABC):
     def checksum_int(self, value: int) -> None:
         self.checksum = struct.pack(Encoding.UINT8, value)  # type: ignore[attr-defined]
 
+    ## Validation
+    @property
+    def is_checksum_valid(self) -> bool:
+        return self.checksum_int == self.calculate_checksum()
+
+
+    ### Methods
+    ## Checksum
     def calculate_checksum(self) -> int:
         """Computes the checksum over CHECKSUM_COVERAGE of the current raw bytes."""
         return _checksum(self.raw_bytes[self.CHECKSUM_COVERAGE])
@@ -143,10 +121,7 @@ class ChecksummedPayload(BasePayload, ABC):
         """Writes the computed checksum into the checksum field."""
         self.checksum_int = self.calculate_checksum()
 
-    @property
-    def is_checksum_valid(self) -> bool:
-        return self.checksum_int == self.calculate_checksum()
-
+    ## Validation
     def validate(self) -> Self:
         """
         :raises ValueError: If the stored checksum does not match the computed one.
@@ -158,37 +133,18 @@ class ChecksummedPayload(BasePayload, ABC):
             )
         return self
 
+    ## Serialization
     def to_bytes(self) -> bytes:
         """Updates the checksum field, then returns the wire bytes."""
         self.update_checksum()
         return self.raw_bytes
 
 
-# ---------------------------------------------------------------------------
-# Read payloads  (checksum present, by Inim wire design)
-# ---------------------------------------------------------------------------
-
+### Read Payloads
 @dataclass(slots = True)
 class ReadRequestPayload(ChecksummedPayload):
-    """
-    Plaintext payload for a memory read request.
 
-    Wire layout (20 bytes):
-        Address               [0:8]    uint64 LE
-        Transfer length*      [8:12]   uint32 LE
-        Chunk length          [12:16]  uint32 LE
-        Padding               [16:18]  0x0000
-        Marker                [18:19]  0x11
-        Checksum              [19:20]  uint8        covers [0:19]
-
-    Notes:
-    *       Transfer length
-            - On the first chunk of a read operation: represents the total number of bytes
-              to be transferred for the entire read request (declared transfer size).
-            - On subsequent chunks (or single-chunk reads): mirrors the chunk length and
-              is effectively redundant at the native level.
-    """
-
+    ### Constants
     class Layout:
         address_size: Final[int] = Encoding.UINT64_LE_SIZE
         transfer_length_size: Final[int] = Encoding.UINT32_LE_SIZE
@@ -216,6 +172,8 @@ class ReadRequestPayload(ChecksummedPayload):
     MARKER: ClassVar[bytes] = b"\x11"
     CHECKSUM_COVERAGE: ClassVar[slice] = slice(Layout.address.start, Layout.marker.stop)
 
+
+    ### Attributes
     address: bytes = bytes(Layout.address_size)
     transfer_length: bytes = bytes(Layout.transfer_length_size)
     chunk_length: bytes = bytes(Layout.chunk_length_size)
@@ -223,10 +181,8 @@ class ReadRequestPayload(ChecksummedPayload):
     marker: bytes = MARKER
     checksum: bytes = bytes(Layout.checksum_size)
 
-    # ------------------------------------------------------------------
-    # High-level entry points
-    # ------------------------------------------------------------------
 
+    ### Main
     @classmethod
     def assemble(cls, address: int, chunk_length: int, transfer_length: int | None = None) -> bytes:
         """Builds the payload, computes its checksum, and returns the wire bytes."""
@@ -248,10 +204,8 @@ class ReadRequestPayload(ChecksummedPayload):
         instance.validate()
         return instance.address_int, instance.transfer_length_int, instance.chunk_length_int
 
-    # ------------------------------------------------------------------
-    # Constructors
-    # ------------------------------------------------------------------
 
+    ### Constructors
     @classmethod
     def build(cls, address: int, chunk_length: int, transfer_length: int | None = None) -> Self:
         """Constructs a payload object from logical parameters. Checksum is 0-initialised."""
@@ -276,10 +230,9 @@ class ReadRequestPayload(ChecksummedPayload):
             checksum = raw[cls.Layout.checksum],
         )
 
-    # ------------------------------------------------------------------
-    # Typed field accessors
-    # ------------------------------------------------------------------
 
+    ### Properties
+    ## Helpers
     @property
     def address_int(self) -> int:
         return struct.unpack(Encoding.UINT64_LE, self.address)[0]
@@ -304,10 +257,7 @@ class ReadRequestPayload(ChecksummedPayload):
     def chunk_length_int(self, value: int) -> None:
         self.chunk_length = struct.pack(Encoding.UINT32_LE, value)
 
-    # ------------------------------------------------------------------
-    # Serialization
-    # ------------------------------------------------------------------
-
+    ## Serialization
     @property
     def raw_bytes(self) -> bytes:
         return b"".join((
@@ -322,13 +272,6 @@ class ReadRequestPayload(ChecksummedPayload):
 
 @dataclass(slots = True)
 class ReadResponsePayload(ChecksummedPayload):
-    """
-    Plaintext payload for a memory read response.
-
-    Wire layout (dynamic length):
-      Data      [0 : n]     raw bytes
-      Checksum  [n : n+1]   uint8       covers [0:n]
-    """
 
     ### Constants
     class Layout:
@@ -337,15 +280,14 @@ class ReadResponsePayload(ChecksummedPayload):
         checksum: Final[slice] = previous_slice(None, checksum_size)
         data: Final[slice] = previous_slice(checksum, None)
 
-    CHECKSUM_COVERAGE: ClassVar[slice] = slice(0, -1)  # everything except the last byte
+    CHECKSUM_COVERAGE: ClassVar[slice] = Layout.data
 
+
+    ### Attributes
     data: bytes = b""
     checksum: bytes = bytes(1)
 
-    # ------------------------------------------------------------------
-    # High-level entry points
-    # ------------------------------------------------------------------
-
+    ### Main
     @classmethod
     def assemble(cls, data: bytes) -> bytes:
         """Wraps data with a checksum and returns the wire bytes."""
@@ -361,10 +303,8 @@ class ReadResponsePayload(ChecksummedPayload):
         """
         return cls.from_bytes(raw).validate().data
 
-    # ------------------------------------------------------------------
-    # Constructors
-    # ------------------------------------------------------------------
 
+    ### Constructors
     @classmethod
     def build(cls, data: bytes) -> Self:
         """Constructs a payload object from logical parameters. Checksum is 0-initialised."""
@@ -378,19 +318,15 @@ class ReadResponsePayload(ChecksummedPayload):
             checksum = raw[cls.Layout.checksum],
         )
 
-    # ------------------------------------------------------------------
-    # Serialization
-    # ------------------------------------------------------------------
 
+    ### Properties
+    ## Serialization
     @property
     def raw_bytes(self) -> bytes:
         return b"".join((self.data, self.checksum))
 
 
-# ---------------------------------------------------------------------------
-# Command payloads  (no checksum, by Inim wire design)
-# ---------------------------------------------------------------------------
-
+### Command Payloads
 @dataclass(slots = True)
 class CommandRequestPayload(BasePayload):
 
@@ -573,6 +509,7 @@ class CommandWithPinRequestPayload(CommandRequestPayload):
 
 
     ### Methods
+    ## Pin
     def _decode_pin(self) -> str:
         digits = []
         for byte in self.pin:
@@ -586,20 +523,8 @@ class CommandWithPinRequestPayload(CommandRequestPayload):
         return "".join(digits)
 
 
-# ---------------------------------------------------------------------------
-# Command response placeholder
-# ---------------------------------------------------------------------------
-
 @dataclass(slots = True)
 class CommandResponsePayload(BasePayload):
-    """
-    Plaintext payload for a command response.
-
-    Note: command payloads carry no checksum — this is by Inim wire design.
-
-    TODO: The response envelope is not yet decoded.
-          For now the raw bytes are stored as-is and returned to the caller.
-    """
 
     ### Constants
     class Layout:
@@ -612,6 +537,7 @@ class CommandResponsePayload(BasePayload):
     ### Attributes
     header: bytes = bytes(Layout.header_size)
     data: bytes = b""
+
 
     ### Main
     @classmethod
@@ -646,14 +572,6 @@ class CommandResponsePayload(BasePayload):
 
 @dataclass(slots = True)
 class CommandWithPinResponsePayload(CommandResponsePayload):
-    """
-    Plaintext payload for a command with pin response.
-
-    Note: command payloads carry no checksum — this is by Inim wire design.
-
-    TODO: The response envelope is not yet decoded.
-          For now the raw bytes are stored as-is and returned to the caller.
-    """
 
     ### Constants
     class Layout:

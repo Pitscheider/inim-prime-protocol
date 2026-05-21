@@ -44,14 +44,19 @@ class Cipher:
     to ensure the CBC chaining state is always reset to the IV.
     """
 
+    ### Constants
     AES_KEY_SIZE: ClassVar[int] = 16  # AES-128 key size in bytes
     AES_BLOCK_SIZE: ClassVar[int] = 16  # AES block size in bytes
 
+
+    ### Attributes
     __slots__ = (
         "_key",
         "_iv",
     )
 
+
+    ### Constructors
     def __init__(
             self,
             password: str,
@@ -87,10 +92,8 @@ class Cipher:
         self._key: bytes = bytes(key)
         self._iv: bytes = bytes(iv)
 
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
 
+    ### Main
     def encrypt(
             self,
             plaintext: bytes,
