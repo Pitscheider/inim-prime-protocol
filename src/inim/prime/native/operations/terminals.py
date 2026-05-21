@@ -5,26 +5,6 @@ from inim.prime.native.wire import Protocol
 
 from . import resolve_address
 
-
-
-def _build_terminal_label_sizes() -> dict[TerminalType, int]:
-    size: dict[TerminalType, int] = {}
-    for t in TerminalType:
-        size[t] = TERMINALS_MAX_NUMBER[t] * Memory.LABEL_SIZE
-    return size
-
-def _build_terminal_label_layouts(offset: int = 0) -> dict[TerminalType, slice]:
-    layout: dict[TerminalType, slice] = {}
-    cursor = offset
-
-    for t in TerminalType:
-        size = TERMINAL_LABEL_SIZES[t]
-
-        layout[t] = slice(cursor, cursor + size)
-        cursor += size
-
-    return layout
-
 class TerminalType(StrEnum):
     PANEL = auto()
     EXPANSION = auto()
@@ -51,6 +31,26 @@ TERMINALS_MAX_NUMBER: dict[TerminalType, int] = {
     TerminalType.FOG_MACHINE: 10,
     TerminalType.VIRTUAL: 20,
 }
+
+def _build_terminal_label_sizes() -> dict[TerminalType, int]:
+    size: dict[TerminalType, int] = {}
+    for t in TerminalType:
+        size[t] = TERMINALS_MAX_NUMBER[t] * Memory.LABEL_SIZE
+    return size
+
+def _build_terminal_label_layouts(offset: int = 0) -> dict[TerminalType, slice]:
+    layout: dict[TerminalType, slice] = {}
+    cursor = offset
+
+    for t in TerminalType:
+        size = TERMINAL_LABEL_SIZES[t]
+
+        layout[t] = slice(cursor, cursor + size)
+        cursor += size
+
+    return layout
+
+
 
 TERMINAL_LABEL_SIZES = _build_terminal_label_sizes()
 TERMINAL_LABEL_LAYOUTS: dict[TerminalType, slice] = _build_terminal_label_layouts()
