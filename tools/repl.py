@@ -1,9 +1,9 @@
 import asyncio
 
-from inim.prime.native.operations.terminals import TerminalType
+from inim.prime.native.operations.terminals.const import TerminalType
 from inim.prime.native.wire import Protocol
 from inim.prime.native.wire import Cipher
-from inim.prime.native import operations
+from inim.prime.native import operations, helpers
 from inim.prime.native.models import PartitionMode
 from inim.prime.native.wire.frame import Frame, OuterFrame, InnerFrame
 
@@ -107,7 +107,7 @@ async def resolve_address(protocol: Protocol):
 
 async def get_partition_names(protocol: Protocol):
     await protocol.connect()
-    partition_names = await operations.get_partition_names(protocol)
+    partition_names = await operations.get_partition_labels(protocol)
     protocol.disconnect()
 
     print(f"{len(partition_names)} partition(s).")
@@ -127,7 +127,7 @@ async def get_partition_statuses(protocol: Protocol):
 
 async def get_partitions(protocol: Protocol):
     await protocol.connect()
-    partitions = await operations.get_partitions(protocol)
+    partitions = await helpers.get_partitions(protocol)
     protocol.disconnect()
 
     for p in partitions:
@@ -207,7 +207,7 @@ async def reset_partitions(protocol: Protocol, pin: str):
 
         print(f"Added: partition {idx}")
 
-    await operations.reset_partitions(protocol, partition_ids, pin)
+    await operations.partitions.reset_partitions(protocol, partition_ids, pin)
     await asyncio.sleep(1)
     await get_partitions(protocol)
     protocol.disconnect()
@@ -215,7 +215,7 @@ async def reset_partitions(protocol: Protocol, pin: str):
 async def get_panel_info(protocol: Protocol):
     await protocol.connect()
 
-    serial_number, firmware, model = await operations.get_panel_info(protocol)
+    serial_number, firmware, model = await operations.panel.get_panel_info(protocol)
 
     print(f"Serial number: {serial_number}")
     print(f"Firmware: {firmware}")
@@ -228,7 +228,7 @@ async def get_terminal_labels(protocol: Protocol):
     await protocol.connect()
 
     for t in TerminalType:
-        t_labels = await operations.get_terminal_labels(protocol, t)
+        t_labels = await operations.terminals.get_terminal_labels(protocol, t)
         print(f"{t.value}:")
         for idx, l in t_labels.items():
             print(f"{idx} - {l}")

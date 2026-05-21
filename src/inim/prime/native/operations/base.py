@@ -18,22 +18,3 @@ async def resolve_address(protocol: Protocol, index: int) -> int:
     """
     response = await protocol.read_memory(index, AddressTable.ENTRY_SIZE)
     return decode_int(response, Encoding.UINT32_LE)
-
-
-async def get_panel_info(
-        protocol: Protocol,
-) -> tuple[str, str, str]:
-    RESPONSE_PAYLOAD_LENGTH: Final[int] = 38
-    SERIAL_NUMBER: Final[slice] = slice(0, 16)
-    DESCRIPTION: Final[slice] = slice(16, 32)
-
-    panel_info = await protocol.execute_command(
-        operation = CommandOperation.GET_PANEL_INFO,
-        response_payload_length = RESPONSE_PAYLOAD_LENGTH,
-    )
-
-    serial_number = panel_info[SERIAL_NUMBER].decode("ascii").rstrip()
-    description = panel_info[DESCRIPTION].decode("ascii").rstrip()
-    firmware, model = description.split(" ", maxsplit = 1)
-
-    return serial_number, firmware, model

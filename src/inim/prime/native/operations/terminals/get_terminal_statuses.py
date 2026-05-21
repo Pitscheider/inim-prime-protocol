@@ -1,0 +1,70 @@
+from typing import Final
+
+from inim.prime.native.const import Encoding, CommandOperation
+from inim.prime.native.utils import encode_int
+from inim.prime.native.wire import Protocol
+from inim.prime.native.wire.payload import CommandWithPinRequestPayload
+
+### Constants
+TERMINAL_STATUS_SIZE: Final[int] = 10
+MAX_CHUNK_TERMINALS: Final[int] = 20
+RESPONSE_PAYLOAD_DATA_LENGTH: Final[int] = TERMINAL_STATUS_SIZE * MAX_CHUNK_TERMINALS
+COMMAND_OPERATION: Final[CommandOperation] = CommandOperation.GET_TERMINAL_STATUSES
+
+### Functions
+def assemble_data(start_terminal: int, end_terminal: int) -> bytes:
+    return b"".join((
+        encode_int(start_terminal, Encoding.UINT16_LE),
+        encode_int(end_terminal, Encoding.UINT16_LE),
+    ))
+
+def assemble_payload(start_terminal: int, end_terminal: int, pin: str | None = None) -> bytes:
+    return CommandWithPinRequestPayload.assemble(
+        COMMAND_OPERATION,
+        pin = pin,
+        data = assemble_data(start_terminal, end_terminal),
+    )
+
+def disassemble_payload(start_terminal: int, end_terminal: int, response_data: bytes) -> dict[int, bytes]:
+    terminal_statuses: dict[int, bytes] = {}
+
+    for idx, t_id in enumerate(
+            range(start_terminal, end_terminal, 1),
+            start = 0,
+    ):
+        offset = idx * TERMINAL_STATUS_SIZE
+        terminal_statuses[t_id] = response_data[offset:offset + TERMINAL_STATUS_SIZE]
+
+    return terminal_statuses
+
+async def get_chunk(
+    protocol: Protocol,
+    start_terminal: int,
+    end_terminal: int,
+    pin: str | None = None,
+) -> dict[int, bytes]:
+
+
+    response = await protocol.execute_command_with_pin(
+        COMMAND_OPERATION,
+        assemble_data(start_terminal, end_terminal),
+        pin,
+    )
+
+    return disassemble_payload(start_terminal, end_terminal, response)
+
+async def get_chunks(
+    protocol: Protocol,
+    start_terminal: int,
+    end_terminal: int,
+    pin: str | None = None,
+) -> dict[int, bytes]:
+
+    chunks: dict[int, bytes] = {}
+
+    for start_i in range(start_terminal, end_terminal, MAX_CHUNK_TERMINALS):
+        end_i = min(start_i + MAX_CHUNK_TERMINALS, end_terminal)
+
+        chunks |= await get_chunk(protocol, start_i, end_i, pin)
+
+    return chunks

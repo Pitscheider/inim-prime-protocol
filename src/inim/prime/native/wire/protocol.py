@@ -157,8 +157,11 @@ class Protocol:
             self,
             operation: CommandOperation,
             data: bytes | None = None,
-            response_payload_length: int | None = None,
+            response_payload_data_length: int | None = None,
     ) -> bytes:
+
+        response_payload_length = response_payload_data_length - CommandResponsePayload.Layout.header_size if response_payload_data_length else None
+
         payload = CommandRequestPayload.assemble(
             operation = operation,
             data = data,
@@ -177,8 +180,11 @@ class Protocol:
             operation: CommandOperation,
             data: bytes | None = None,
             pin: str | None = None,
-            response_payload_length: int | None = None,
+            response_payload_data_length: int | None = None,
     ) -> bytes:
+
+        response_payload_length = response_payload_data_length - CommandWithPinResponsePayload.Layout.header_size if response_payload_data_length else None
+
         payload = CommandWithPinRequestPayload.assemble(
             operation = operation,
             pin = pin,
