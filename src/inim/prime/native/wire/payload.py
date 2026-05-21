@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import struct
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from typing import ClassVar, Self, Final
 
-from inim.prime.native.const import Encoding, CommandOperation, Panel
-from inim.prime.native.utils import next_slice, previous_slice
+from inim.prime.native.const import Encoding, CommandOperation, Panel, EncodingSizes
+from inim.prime.native.utils import next_slice, previous_slice, decode_int, encode_int
 
 
 ### Helpers
@@ -77,7 +76,7 @@ class ChecksummedPayload(BasePayload, ABC):
 
     ### Constants
     class Layout:
-        checksum_size: Final[int] = 1
+        checksum_size: Final[int] = EncodingSizes.UINT8_SIZE
 
     CHECKSUM_COVERAGE: ClassVar[slice]  # subclasses define the exact coverage
 
@@ -99,11 +98,11 @@ class ChecksummedPayload(BasePayload, ABC):
     ## Helpers
     @property
     def checksum_int(self) -> int:
-        return struct.unpack(Encoding.UINT8, self.checksum)[0]  # type: ignore[attr-defined]
+        return decode_int(self.checksum, Encoding.UINT8)
 
     @checksum_int.setter
     def checksum_int(self, value: int) -> None:
-        self.checksum = struct.pack(Encoding.UINT8, value)  # type: ignore[attr-defined]
+        self.checksum = encode_int(value, Encoding.UINT8)
 
     ## Validation
     @property
@@ -146,9 +145,9 @@ class ReadRequestPayload(ChecksummedPayload):
 
     ### Constants
     class Layout:
-        address_size: Final[int] = Encoding.UINT64_LE_SIZE
-        transfer_length_size: Final[int] = Encoding.UINT32_LE_SIZE
-        chunk_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+        address_size: Final[int] = EncodingSizes.UINT64_LE_SIZE
+        transfer_length_size: Final[int] = EncodingSizes.UINT32_LE_SIZE
+        chunk_length_size: Final[int] = EncodingSizes.UINT32_LE_SIZE
         padding_size: Final[int] = 2
         marker_size: Final[int] = 1
         checksum_size: Final[int] = ChecksummedPayload.Layout.checksum_size
@@ -235,27 +234,27 @@ class ReadRequestPayload(ChecksummedPayload):
     ## Helpers
     @property
     def address_int(self) -> int:
-        return struct.unpack(Encoding.UINT64_LE, self.address)[0]
+        return decode_int(self.address, Encoding.UINT64_LE)
 
     @address_int.setter
     def address_int(self, value: int) -> None:
-        self.address = struct.pack(Encoding.UINT64_LE, value)
+        self.address = encode_int(value, Encoding.UINT64_LE)
 
     @property
     def transfer_length_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.transfer_length)[0]
+        return decode_int(self.transfer_length, Encoding.UINT32_LE)
 
     @transfer_length_int.setter
     def transfer_length_int(self, value: int) -> None:
-        self.transfer_length = struct.pack(Encoding.UINT32_LE, value)
+        self.transfer_length = encode_int(value, Encoding.UINT32_LE)
 
     @property
     def chunk_length_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.chunk_length)[0]
+        return decode_int(self.chunk_length, Encoding.UINT32_LE)
 
     @chunk_length_int.setter
     def chunk_length_int(self, value: int) -> None:
-        self.chunk_length = struct.pack(Encoding.UINT32_LE, value)
+        self.chunk_length = encode_int(value, Encoding.UINT32_LE)
 
     ## Serialization
     @property
@@ -332,7 +331,7 @@ class CommandRequestPayload(BasePayload):
 
     ### Constants
     class Layout:
-        operation_size: Final[int] = Encoding.UINT32_LE_SIZE
+        operation_size: Final[int] = EncodingSizes.UINT32_LE_SIZE
 
         operation: Final[slice] = next_slice(0, operation_size)
         data: Final[slice] = next_slice(operation, None)
@@ -390,11 +389,11 @@ class CommandRequestPayload(BasePayload):
     ## Helpers
     @property
     def operation_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.operation)[0]
+        return decode_int(self.operation, Encoding.UINT32_LE)
 
     @operation_int.setter
     def operation_int(self, value: int) -> None:
-        self.operation = struct.pack(Encoding.UINT32_LE, value)
+        self.operation = encode_int(value, Encoding.UINT32_LE)
 
     @property
     def operation_enum(self) -> CommandOperation:
@@ -405,7 +404,7 @@ class CommandRequestPayload(BasePayload):
 
     @operation_enum.setter
     def operation_enum(self, operation: CommandOperation) -> None:
-        self.operation = struct.pack(Encoding.UINT32_LE, operation.value)
+        self.operation = encode_int(operation.value, Encoding.UINT32_LE)
 
     ## Serialization
     @property

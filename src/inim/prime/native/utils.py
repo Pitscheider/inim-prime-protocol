@@ -1,7 +1,10 @@
 from __future__ import annotations
+
+import struct
 from functools import singledispatch
 
-from inim.prime.native.const import CRC16_TABLE
+from inim.prime.native.const import CRC16_TABLE, Encoding
+
 
 ### Next Slice
 @singledispatch
@@ -39,6 +42,12 @@ def previous_slice(s: slice | None, size: int | None) -> slice:
 
 def slice_size(s: slice) -> int:
     return s.stop - s.start
+
+def decode_int(value: bytes, encoding: Encoding) -> int:
+    return struct.unpack(encoding, value)[0]
+
+def encode_int(value: int, encoding: Encoding) -> bytes:
+    return struct.pack(encoding, value)
 
 def round_up_to_block(
         n: int,

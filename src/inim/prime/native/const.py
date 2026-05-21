@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Final
 
 
-class Encoding:
-    UINT8: Final[str] = "B"
-    UINT16_LE: Final[str] = "<H"
-    UINT32_LE: Final[str] = "<I"
-    UINT64_LE: Final[str] = "<Q"
+class Encoding(StrEnum):
+    UINT8 = "B"
+    UINT16_LE = "<H"
+    UINT32_LE = "<I"
+    UINT64_LE = "<Q"
 
+
+class EncodingSizes:
     UINT8_SIZE: Final[int] = 1
     UINT16_LE_SIZE: Final[int] = 2
     UINT32_LE_SIZE: Final[int] = 4

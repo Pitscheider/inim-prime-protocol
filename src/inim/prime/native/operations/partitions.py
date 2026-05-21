@@ -1,5 +1,4 @@
 import asyncio
-import struct
 from typing import Final
 
 from inim.prime.native.const import Memory
@@ -8,6 +7,7 @@ from inim.prime.native.models import PartitionMode, PartitionStatus
 from inim.prime.native.models.partitions import Partition
 from inim.prime.native.wire.protocol import Protocol
 from . import resolve_address
+from ..utils import encode_int
 
 PARTITIONS_MAX_NUMBER: Final[int] = 30
 
@@ -54,7 +54,7 @@ async def reset_partitions(
             raise IndexError(f'Partition id {idx} out of range')
         partitions_to_reset_int += 2 ** (idx - 1)
 
-    command_data = struct.pack(Encoding.UINT32_LE, partitions_to_reset_int)
+    command_data = encode_int(partitions_to_reset_int, Encoding.UINT32_LE)
 
     await protocol.execute_command_with_pin(
         operation = CommandOperation.RESET_PARTITIONS,

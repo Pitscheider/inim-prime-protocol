@@ -1,5 +1,6 @@
 import asyncio
 
+from inim.prime.native.operations.terminals import TerminalType
 from inim.prime.native.wire import Protocol
 from inim.prime.native.wire import Cipher
 from inim.prime.native import operations
@@ -226,6 +227,13 @@ async def get_panel_info(protocol: Protocol):
 async def get_terminal_labels(protocol: Protocol):
     await protocol.connect()
 
+    for t in TerminalType:
+        t_labels = await operations.get_terminal_labels(protocol, t)
+        print(f"{t.value}:")
+        for idx, l in t_labels.items():
+            print(f"{idx} - {l}")
+        print()
+
     protocol.disconnect()
 
 # ---------------------------------------------------------------------------
@@ -312,6 +320,8 @@ async def repl(config: Config) -> None:
             await set_partition_modes(protocol, config.pin)
         elif choice == "get_panel_info":
             await get_panel_info(protocol)
+        elif choice == "get_terminal_labels":
+            await get_terminal_labels(protocol)
         else:
             print(f"Unknown command '{choice}'. Type 'help' for a list of commands.")
 

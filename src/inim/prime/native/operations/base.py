@@ -1,7 +1,7 @@
-import struct
 from typing import Final
 
 from inim.prime.native.const import AddressTable, Encoding, CommandOperation
+from inim.prime.native.utils import decode_int
 from inim.prime.native.wire.protocol import Protocol
 
 
@@ -17,7 +17,7 @@ async def resolve_address(protocol: Protocol, index: int) -> int:
     :return: Resolved 32-bit address stored at the given table entry.
     """
     response = await protocol.read_memory(index, AddressTable.ENTRY_SIZE)
-    return struct.unpack(Encoding.UINT32_LE, response)[0]
+    return decode_int(response, Encoding.UINT32_LE)
 
 
 async def get_panel_info(

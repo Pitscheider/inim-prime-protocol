@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import ClassVar, Self, Final
 
-from inim.prime.native.const import Encoding, FrameOperation
-from inim.prime.native.utils import next_slice
+from inim.prime.native.const import Encoding, FrameOperation, EncodingSizes
+from inim.prime.native.utils import next_slice, decode_int, encode_int
 
 
 @dataclass(slots = True)
@@ -42,8 +41,8 @@ class OuterHeader(Header):
     class Layout:
         magic_size: Final[int] = 2
         padding_size: Final[int] = 2
-        inner_frame_length_size: Final[int] = Encoding.UINT32_LE_SIZE
-        response_inner_frame_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+        inner_frame_length_size: Final[int] = EncodingSizes.UINT32_LE_SIZE
+        response_inner_frame_length_size: Final[int] = EncodingSizes.UINT32_LE_SIZE
 
         size: Final[int] = (
                 magic_size
@@ -106,19 +105,19 @@ class OuterHeader(Header):
     ## Helper
     @property
     def inner_frame_length_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.inner_frame_length)[0]
+        return decode_int(self.inner_frame_length, Encoding.UINT32_LE)
 
     @inner_frame_length_int.setter
     def inner_frame_length_int(self, value: int) -> None:
-        self.inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
+        self.inner_frame_length = encode_int(value, Encoding.UINT32_LE)
 
     @property
     def response_inner_frame_length_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.response_inner_frame_length)[0]
+        return decode_int(self.response_inner_frame_length, Encoding.UINT32_LE)
 
     @response_inner_frame_length_int.setter
     def response_inner_frame_length_int(self, value: int) -> None:
-        self.response_inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
+        self.response_inner_frame_length = encode_int(value, Encoding.UINT32_LE)
 
     ## Serialization
     @property
@@ -190,9 +189,9 @@ class InnerHeader(Header):
     ### Constants
     class Layout:
         magic_size: Final[int] = 2
-        crc_size: Final[int] = Encoding.UINT16_LE_SIZE
-        operation_size: Final[int] = Encoding.UINT16_LE_SIZE
-        inner_frame_length_size: Final[int] = Encoding.UINT32_LE_SIZE
+        crc_size: Final[int] = EncodingSizes.UINT16_LE_SIZE
+        operation_size: Final[int] = EncodingSizes.UINT16_LE_SIZE
+        inner_frame_length_size: Final[int] = EncodingSizes.UINT32_LE_SIZE
 
         size: Final[int] = (
                 magic_size
@@ -255,20 +254,20 @@ class InnerHeader(Header):
     ## Helper
     @property
     def inner_frame_length_int(self) -> int:
-        return struct.unpack(Encoding.UINT32_LE, self.inner_frame_length)[0]
+        return decode_int(self.inner_frame_length, Encoding.UINT32_LE)
 
     @inner_frame_length_int.setter
     def inner_frame_length_int(self, value: int) -> None:
-        self.inner_frame_length = struct.pack(Encoding.UINT32_LE, value)
+        self.inner_frame_length = encode_int(value, Encoding.UINT32_LE)
 
     @property
     def crc_int(self) -> int:
         """Inner header CRC value as an integer (uint16 LE)."""
-        return struct.unpack(Encoding.UINT16_LE, self.crc)[0]
+        return decode_int(self.crc, Encoding.UINT16_LE)
 
     @crc_int.setter
     def crc_int(self, value: int) -> None:
-        self.crc = struct.pack(Encoding.UINT16_LE, value)
+        self.crc = encode_int(value, Encoding.UINT16_LE)
 
     @property
     def operation_enum(self) -> FrameOperation | None:

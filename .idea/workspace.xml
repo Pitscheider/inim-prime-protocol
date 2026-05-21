@@ -4,10 +4,15 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0c904636-8b4a-4c5f-878c-ed2f9cba7311" name="Changes" comment="Refactor constants Layout">
+    <list default="true" id="0c904636-8b4a-4c5f-878c-ed2f9cba7311" name="Changes" comment="Code cleanup">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/inim/prime/native/wire/cipher.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/wire/cipher.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inim/prime/native/const.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/const.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inim/prime/native/operations/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/operations/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inim/prime/native/operations/partitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/operations/partitions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inim/prime/native/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/inim/prime/native/wire/header.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/wire/header.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/inim/prime/native/wire/payload.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/inim/prime/native/wire/payload.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tools/repl.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/repl.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -445,7 +450,7 @@
       <workItem from="1779208437797" duration="178000" />
       <workItem from="1779208691114" duration="45000" />
       <workItem from="1779209071398" duration="11954000" />
-      <workItem from="1779352413311" duration="10498000" />
+      <workItem from="1779352413311" duration="12697000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor">
       <option name="closed" value="true" />
@@ -583,7 +588,15 @@
       <option name="project" value="LOCAL" />
       <updated>1779366185094</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="Code cleanup">
+      <option name="closed" value="true" />
+      <created>1779367134445</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1779367134445</updated>
+    </task>
+    <option name="localTasksCounter" value="19" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -599,10 +612,11 @@
     <MESSAGE value="Fixed wrong     &#10;UINT16_LE_SIZE: Final[int] = 2&#10;    UINT32_LE_SIZE: Final[int] = 4&#10;    UINT64_LE_SIZE: Final[int] = 8" />
     <MESSAGE value="Fixed wrong     &#10;    UINT8_SIZE: Final[int] = 1&#10;    UINT16_LE_SIZE: Final[int] = 2&#10;    UINT32_LE_SIZE: Final[int] = 4&#10;    UINT64_LE_SIZE: Final[int] = 8" />
     <MESSAGE value="Refactor constants Layout" />
-    <option name="LAST_COMMIT_MESSAGE" value="Refactor constants Layout" />
+    <MESSAGE value="Code cleanup" />
+    <option name="LAST_COMMIT_MESSAGE" value="Code cleanup" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/inim_prime_native$repl.coverage" NAME="repl Coverage Results" MODIFIED="1779364701924" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
-    <SUITE FILE_PATH="coverage/inim_prime_native$test.coverage" NAME="test Coverage Results" MODIFIED="1779366301994" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/local" />
+    <SUITE FILE_PATH="coverage/inim_prime_native$repl.coverage" NAME="repl Coverage Results" MODIFIED="1779369008409" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/inim_prime_native$test.coverage" NAME="test Coverage Results" MODIFIED="1779367355092" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/local" />
   </component>
 </project>
